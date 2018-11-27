@@ -1,0 +1,51 @@
+"""
+Created on Mon Nov 26 18:05:06 2018
+
+@author: risabh
+"""
+
+import uuid
+
+class Master(process):
+
+    def setup():
+        self.fileStore = {}                 # Maps filename to chunkuuids
+        self.chunkStore = {}                # Maps chunkuuids to chunk locations
+        self.chunkServerStore = {}          # Maps chunk location to physical server/storage
+        self.numChunkServer = 2
+        self.chunkSize = 20
+        self.counter = 0
+    
+    def intChunks():
+        for i in range(self.numChunkServer):
+            chunkServer = new(GFSChunkserver)
+            setup(chunkServer, (i))
+            self.chunkServerStore[i] = chunkServer
+    
+    def allocateChunks(numChunks):
+        chunkuuids = []
+        for i in range(numChunks):
+            chunkuuid = uuid.uuid4()
+            chunkLocation = self.counter
+            chunkuuids.append(chunkuuid)
+            self.chunkStore[chunkuuid] = chunkLocation
+            self.counter = (self.counter+1) % self.numChunkServer
+        return chunkuuids
+            
+    
+    def allocate(msg = (‘ALLOCATE’, pid, fileName, numChunks)):
+        chunkuuids = self.allocateChunks(numChunks)
+        self.fileStore[fileName] = chunkuuids
+        send(‘ALLOCATE_DONE’, pid, fileName, chunkuuids)
+    
+    def allocate_append(msg = (‘ALLOCATE_APPEND’, pid, fileName, numChunks)):
+        chunkuuids = self.allocateChunks(numChunks)
+        chunkuuids_initial = self.fileStore[fileName]
+        chunkuuids_initial.extend(chunkuuids)
+        send(‘ALLOCATE_APPEND_DONE’, pid, fileName, chunkuuids)
+    
+    def delete(msg =(‘DELETE’, pid, fileName)):
+        chunkuuids = self.fileStore[fileName]
+        del self.fileStore[fileName]
+    
+
