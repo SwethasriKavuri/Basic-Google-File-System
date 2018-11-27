@@ -1,0 +1,59 @@
+import sys, time
+config(channel is fifo, clock is lamport)
+
+
+class GFSClient(process):
+    
+    def setup(master:master):
+        self.master = master
+
+    def get_num_chunks(self, size):
+        return ((size//self.master.chunksize)+(1 if size%self.master.chunksize > 0 else 0))
+
+    def exists(self, file_name):
+        send(('FILE_EXISTS_MASTER', file_name), to= master)                 # send and await message from master server
+        await(received(('FILE_EXISTS_MASTER_DONE', res), from_=master))
+        return res
+
+    def receive(msg= ('WRITE_MSG', thread_id, file_name, data_to_write)):
+        if(self.exists(file_name)):
+            self.delete(file_name)
+        num_chunks = self.get_num_chunks(len(data_to_write))
+        chunkuuids = []
+        send(('ALLOC_MASTER', file_name, num_chunks), to= master)           # send and await message from master server
+        await(received(('ALLOC_DONE', chunkuuids), from_=master))
+        self.write_chunks(chunkuuids, data_to_write)
+
+    def write_chunks(self, chunkuuids, data_to_write):
+        chunks = [ data_to_write[x: x+self.master.chunksize] for x in range(0, len(data_to_write), self.master.chunksize) ]
+        chunkservers = self.master.chunkservers
+        for i in range(0, len(chunkuuids)):
+            chunkloc = self.master.chunktable(chunkuuids[i])
+            send(('WRITE_CHUNK', chunkservers[chunkloc], chunkuuids[i], chunks[i]), to= chunk)      # send and await message from chunk server
+
+    def receive(msg= ('WRITE_APPEND_MSG', thread_id, file_name, data_to_write)):
+        if not self.exists(file_name):
+            raise Exception("append error, file does not exist: " + file_name)
+        num_chunks = self.get_num_chunks(len(data_to_write))
+        chunkuuids = []
+        send(('ALLOC_APPEND_MASTER', file_name, num_chunks), to= master)
+        await(received(('ALLOC_APPEND_DONE', chunkuuids), from_=master))        # send and await message from master server
+        self.write_chunks(chunkuuids, data_to_write)
+
+    def receive(msg= ('READ_MSG', thread_id, file_name)):
+        if not self.exists(file_name):
+            raise Exception("read error, file does not exist: " + file_name)
+        chunks = []
+        chunkuuids = self.master.filetable[filename]
+        chunkservers = self.master.chunkservers
+        for chunkuuid in chunkuuids:
+            chunkloc = self.master.chunktable(chunkuuid)
+            send(('READ_CHUNK', chunkservers[chunkloc], chunkuuid), to= chunk)      # send and await message from chunk server
+            await(received(('READ_CHUNK_DONE', chunk), from_= chunk))
+            chunks.append(chunk)
+        data_read = reduce(lambda x, y: x+y, chunks)
+        return data_read
+
+    def receive(msg= ('DELETE', thread_id, file_name)):
+        send(('DELETE_FILE_MASTER', file_name), to= master)                         # send and await message from master server
+        await(received(('DELETE_FILE_MASTER_DONE', res), from_=master))
