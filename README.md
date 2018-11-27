@@ -1,2 +1,2 @@
-# Comparing Chord in C, Java, Go, Python, and DistAlgo
+# Implementing basic GFS in distalgo
 <https://sites.google.com/a/stonybrook.edu/sbcs535/projects/compare-chord-langs>
