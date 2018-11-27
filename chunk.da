@@ -5,46 +5,47 @@ config(channel is fifo, clock is lamport)
 
 class GFSChunkserver(process):
 
-    def setup(chunkloc):
+    def setup(chunkloc:int):
+        output('Setting up chunk', chunkloc)
         self.chunkloc = chunkloc
         self.chunktable = {}
-        self.local_filesystem_root = "/tmp/gfs/chunks/" + repr(chunkloc)
-        if not os.access(self.local_filesystem_root, os.W_OK):
-            os.makedirs(self.local_filesystem_root)
+        self.localFilesystemRoot = "/tmp/gfs/chunks/" + repr(chunkloc)
+        if not os.access(self.localFilesystemRoot, os.W_OK):
+            os.makedirs(self.localFilesystemRoot)
 
     def receive(msg= ('WRITE_CHUNK',chunkuuid,chunk),from_ = sender):
         success = write(chunkuuid,chunk)
-        send(('WRITE_CHUNK_RESULT',success),to= sender)
+        send(('WRITE_CHUNK_DONE',success),to= sender)
 
     def receive(msg= ('READ_CHUNK',chunkuuid),from_ = sender):
         chunk = read(chunkuuid)
-        send(('READ_CHUNK_RESULT',chunk),to= sender)
+        send(('READ_CHUNK_DONE',chunk),to= sender)
 
     def receive(msg= ('GET_FILE_NAME',chunkuuid),from_ = sender):
-        filename = chunk_filename(chunkuuid)
+        filename = chunkFileName(chunkuuid)
         send(('CHUNK_FILE_NAME',filename),to= sender)
 
     def write(chunkuuid, chunk):
         try:
-            local_filename = self.chunk_filename(chunkuuid)
-            with open(local_filename, "w") as f:
+            localFilename = self.chunkFileName(chunkuuid)
+            with open(localFilename, "w") as f:
                 f.write(chunk)
-            self.chunktable[chunkuuid] = local_filename
+            self.chunktable[chunkuuid] = localFilename
             return True
         except:
             return False
 
     def read(chunkuuid):
         data = None
-        local_filename = self.chunk_filename(chunkuuid)
-        with open(local_filename, "r") as f:
+        localFilename = self.chunkFileName(chunkuuid)
+        with open(localFilename, "r") as f:
             data = f.read()
         return data
 
-    def chunk_filename(chunkuuid):
-        local_filename = self.local_filesystem_root + "/" \
+    def chunkFileName(chunkuuid):
+        localFilename = self.localFilesystemRoot + "/" \
             + str(chunkuuid) + '.gfs'
-        return local_filename
+        return localFilename
 
     def run():
-         await(received(('DONE',s)))
+         await(received(('DONE',)))

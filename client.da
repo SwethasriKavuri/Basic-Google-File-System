@@ -1,50 +1,54 @@
 import sys, time
+from  master import Master
 config(channel is fifo, clock is lamport)
 
 
 class GFSClient(process):
     
-    def setup(master:master):
+    def setup(master:Master):
+        output('Setting up client', master)
         self.master = master
 
-    def get_num_chunks(self, size):
-        return ((size//self.master.chunksize)+(1 if size%self.master.chunksize > 0 else 0))
+    def getNumChunks(size):
+        return (size//self.master.chunkSize)
 
-    def exists(self, file_name):
-        send(('FILE_EXISTS_MASTER', file_name), to= master)                 # send and await message from master server
+    def exists(fileName):
+        res = True
+        output('Searching for file', fileName)
+        send(('FILE_EXISTS_MASTER', fileName), to= master)                 # send and await message from master server
         await(received(('FILE_EXISTS_MASTER_DONE', res), from_=master))
-        return res
+        output('Hi',res)
 
-    def receive(msg= ('WRITE_MSG', thread_id, file_name, data_to_write)):
-        if(self.exists(file_name)):
-            self.delete(file_name)
-        num_chunks = self.get_num_chunks(len(data_to_write))
+    def receive(msg= ('WRITE_MSG', threadId, fileName, dataToWrite)):
+        if(exists(fileName)):
+            self.delete(fileName)
+        numChunks = self.getNumChunks(len(dataToWrite))
         chunkuuids = []
-        send(('ALLOC_MASTER', file_name, num_chunks), to= master)           # send and await message from master server
+        send(('ALLOC_MASTER', fileName, numChunks), to= master)           # send and await message from master server
         await(received(('ALLOC_DONE', chunkuuids), from_=master))
-        self.write_chunks(chunkuuids, data_to_write)
+        self.writeChunks(chunkuuids, dataToWrite)
 
-    def write_chunks(self, chunkuuids, data_to_write):
-        chunks = [ data_to_write[x: x+self.master.chunksize] for x in range(0, len(data_to_write), self.master.chunksize) ]
-        chunkservers = self.master.chunkservers
+    def writeChunks(chunkuuids, dataToWrite):
+        chunks = [ dataToWrite[x: x+self.master.chunksize] for x in range(0, len(dataToWrite), self.master.chunksize) ]
+        chunkservers = self.master.chunkServerStore
         for i in range(0, len(chunkuuids)):
             chunkloc = self.master.chunktable(chunkuuids[i])
-            send(('WRITE_CHUNK', chunkservers[chunkloc], chunkuuids[i], chunks[i]), to= chunk)      # send and await message from chunk server
+            send(('WRITE_CHUNK', chunkuuids[i], chunks[i]), to= chunkservers[chunkloc])      # send and await message from chunk server
 
-    def receive(msg= ('WRITE_APPEND_MSG', thread_id, file_name, data_to_write)):
-        if not self.exists(file_name):
-            raise Exception("append error, file does not exist: " + file_name)
-        num_chunks = self.get_num_chunks(len(data_to_write))
+    def receive(msg= ('WRITE_APPEND_MSG', thread_id, fileName, dataToWrite)):
+        if not self.exists(fileName):
+            raise Exception("append error, file does not exist: " + fileName)
+        numChunks = self.getNumChunks(len(dataToWrite))
         chunkuuids = []
-        send(('ALLOC_APPEND_MASTER', file_name, num_chunks), to= master)
+        send(('ALLOC_APPEND_MASTER', fileName, numChunks), to= master)
         await(received(('ALLOC_APPEND_DONE', chunkuuids), from_=master))        # send and await message from master server
-        self.write_chunks(chunkuuids, data_to_write)
+        self.writeChunks(chunkuuids, dataToWrite)
 
-    def receive(msg= ('READ_MSG', thread_id, file_name)):
-        if not self.exists(file_name):
-            raise Exception("read error, file does not exist: " + file_name)
+    def receive(msg= ('READ_MSG', thread_id, fileName)):
+        if not self.exists(fileName):
+            raise Exception("read error, file does not exist: " + fileName)
         chunks = []
-        chunkuuids = self.master.filetable[filename]
+        chunkuuids = self.master.filetable[fileName]
         chunkservers = self.master.chunkservers
         for chunkuuid in chunkuuids:
             chunkloc = self.master.chunktable(chunkuuid)
@@ -54,6 +58,22 @@ class GFSClient(process):
         data_read = reduce(lambda x, y: x+y, chunks)
         return data_read
 
-    def receive(msg= ('DELETE', thread_id, file_name)):
-        send(('DELETE_FILE_MASTER', file_name), to= master)                         # send and await message from master server
+    def receive(msg= ('DELETE', thread_id, fileName)):
+        send(('DELETE_FILE_MASTER', fileName), to= master)                         # send and await message from master server
+        #Put a timeout in case file not deleted
         await(received(('DELETE_FILE_MASTER_DONE', res), from_=master))
+    
+    def run():
+        exists('abxc.txt')
+        while 1:
+           a=1 
+
+
+def main():
+    master1 = new(Master)
+    setup(master1, ())
+    start(master1)
+    client1 = new(GFSClient)
+    setup(client1, (master1,))
+    start(client1)
+    await(received(('DONE',)))
