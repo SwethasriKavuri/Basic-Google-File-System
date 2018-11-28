@@ -1,5 +1,7 @@
 import sys, time
 from  master import Master
+from random import randint
+from math import ceil
 config(channel is fifo, clock is lamport)
 
 
@@ -9,38 +11,51 @@ class GFSClient(process):
         output('Setting up client', master)
         self.master = master
         self.temp = None
+        self.chunkSize =10
+        
 
     def getNumChunks(size):
-        return (size//self.master.chunkSize)
+        output(size)
+        return ceil(float(size)/self.chunkSize)
 
     def exists(fileName):
-        res = True
+        res = None
         output('Searching for file', fileName)
-        send(('FILE_EXISTS_MASTER', fileName), to= master)                 # send and await message from master server
-        # await(received(('FILE_EXISTS_MASTER_DONE',res)))
-        await(self.temp != None)
-        output('Hi',self.temp)
+        c = logical_clock()
+        send(('FILE_EXISTS_MASTER', fileName, c), to= master)                 # send and await message from master server
+        await(some(received(('FILE_EXISTS_MASTER_DONE', res, fileName1, c2)),
+                             has= c2 > c and fileName == fileName1))
+        #await(self.temp != None)
+        output('Hi',res, fileName1)
+        return res
 
-    def receive(msg=('FILE_EXISTS_MASTER_DONE',res), from_=m):
-        output("received response from master")
-        self.temp = res
+    #def receive(msg=('FILE_EXISTS_MASTER_DONE',res), from_=m):
+    #    output("received response from master")
+    #    self.temp = res
 
     def receive(msg= ('WRITE_MSG', threadId, fileName, dataToWrite)):
+        output('Write file', fileName)
         if(exists(fileName)):
-            self.delete(fileName)
+            #send(('DELETE', threadId, fileName))
+            await(received(('FILE_DELETED_DONE',)))
         numChunks = self.getNumChunks(len(dataToWrite))
         chunkuuids = []
-        send(('ALLOC_MASTER', fileName, numChunks), to= master)           # send and await message from master server
-        await(received(('ALLOC_DONE', chunkuuids), from_=master))
-        self.writeChunks(chunkuuids, dataToWrite)
+        c = logical_clock()
+        output('Num chunks', numChunks)
+        send(('ALLOC_MASTER', threadId, fileName, numChunks, c), to= master)           # send and await message from master server
+        await(some(received(('ALLOC_DONE',  pid, fileName1, chunkuuids, c2, chunkServerStore, chunkStore)),
+                             has= c2 > c and fileName == fileName1 ))
+        self.writeChunks(chunkuuids, dataToWrite, chunkServerStore, chunkStore)
 
-    def writeChunks(chunkuuids, dataToWrite):
-        chunks = [ dataToWrite[x: x+self.master.chunksize] for x in range(0, len(dataToWrite), self.master.chunksize) ]
-        chunkservers = self.master.chunkServerStore
+    def writeChunks(chunkuuids, dataToWrite, chunkServerStore, chunkStore):
+        output('inside write chunks', chunkStore)
+        chunks = [ dataToWrite[x: x+self.chunkSize] for x in range(0, len(dataToWrite), self.chunkSize) ]
         for i in range(0, len(chunkuuids)):
-            chunkloc = self.master.chunktable(chunkuuids[i])
-            send(('WRITE_CHUNK', chunkuuids[i], chunks[i]), to= chunkservers[chunkloc])      # send and await message from chunk server
-
+            chunkloc = chunkStore[chunkuuids[i]]
+            output(chunkloc)
+            send(('WRITE_CHUNK', chunkuuids[i], chunks[i]), to= chunkServerStore[chunkloc])      # send and await message from chunk server
+        
+        
     def receive(msg= ('WRITE_APPEND_MSG', thread_id, fileName, dataToWrite)):
         if not self.exists(fileName):
             raise Exception("append error, file does not exist: " + fileName)
@@ -66,13 +81,17 @@ class GFSClient(process):
 
     def receive(msg= ('DELETE', thread_id, fileName)):
         send(('DELETE_FILE_MASTER', fileName), to= master)                         # send and await message from master server
-        #Put a timeout in case file not deleted
-        await(received(('DELETE_FILE_MASTER_DONE', res), from_=master))
-    
+        c = logical_clock()
+        if await(some(received(('DELETE_FILE_MASTER_DONE', res, fileName1, c2)),
+                             has= c2 > c and fileName == fileName1)):
+            output('File deleted successfully', fileName)
+            #send('FILE_DELETED_DONE', )
+        elif timeout(10):
+            output('Failed to delete file')
+        
     def run():
-        exists('abxc.txt')
-        while 1:
-           a=1 
+        #exists('abxc.txt')   
+        await(received(('DONE',)))
 
 
 def main():
@@ -82,4 +101,6 @@ def main():
     client1 = new(GFSClient)
     setup(client1, (master1,))
     start(client1)
+    s1 = 'Hi testing 123'
+    send(('WRITE_MSG', 1, 'abc.txt', s1), to=client1) 
     await(received(('DONE',)))

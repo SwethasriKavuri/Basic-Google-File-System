@@ -18,19 +18,22 @@ class Master(process):
         self.numChunkServer = 2
         self.chunkSize = 20
         self.counter = 0
+        self.res = False
         self.initChunks()
+        
     
     def initChunks():
         output('Setting up chunkServer')
-        for i in range(self.numChunkServer):
+        for i in range(0, self.numChunkServer):
             chunkServer = new(GFSChunkserver)
             setup(chunkServer, (i,))
             start(chunkServer)
             self.chunkServerStore[i] = chunkServer
     
     def allocateChunks(numChunks):
+        output('Allocating chunks')
         chunkuuids = []
-        for i in range(numChunks):
+        for i in range(0, numChunks):
             chunkuuid = uuid.uuid4()
             chunkLocation = self.counter
             chunkuuids.append(chunkuuid)
@@ -38,18 +41,21 @@ class Master(process):
             self.counter = (self.counter+1) % self.numChunkServer
         return chunkuuids
      
-    def receive(msg= ('ALLOC_MASTER', pid, fileName, numChunks),from_= client):
+    def receive(msg= ('ALLOC_MASTER', pid, fileName, numChunks, c),from_= client):
+        output('Inside master to write', fileName)
         chunkuuids = self.allocate(fileName, numChunks)
-        send(('ALLOC_DONE', pid, fileName, chunkuuids), to=client)       
+        output('In master chunks', chunkuuids)
+        send(('ALLOC_DONE', pid, fileName, chunkuuids, c+1, chunkServerStore, chunkStore ), to=client)       
     
     def allocate(fileName, numChunks):
         chunkuuids = self.allocateChunks(numChunks)
+        output('Chunks allocated')
         self.fileStore[fileName] = chunkuuids
         return chunkuuids
     
     def receive(msg = ('ALLOC_MASTER_APPEND', pid, fileName, numChunks), from_=client):
         chunkuuids = self.allocate_append(fileName, numChunks)
-        send(('ALLOC_APPEND_DONE', pid, fileName, chunkuuids), to=client)    
+        send(('ALLOC_APPEND_DONE', pid, fileName, chunkuuids, self.chunkServerStore, self.chunkStore ), to=client)    
     
     def allocate_append(fileName, numChunks):
         chunkuuids = self.allocateChunks(numChunks)
@@ -71,10 +77,10 @@ class Master(process):
             output('Error while deleting file')
             return False
             
-    def receive(msg =('FILE_EXISTS_MASTER', fileName), from_= client):
-        res = exists(fileName)
+    def receive(msg =('FILE_EXISTS_MASTER', fileName, c), from_= client):
+        self.res = exists(fileName)
         output(res, client)
-        send(('FILE_EXISTS_MASTER_DONE', res), to=client)
+        send(('FILE_EXISTS_MASTER_DONE', self.res, fileName, c+1), to=client)
         output("RES sent : ", res)
         
     def exists(fileName):
@@ -83,6 +89,9 @@ class Master(process):
             return True
         return False
 
+    def abc():
+        return self.chunkSize
+        
     def run():
         await(received(('DONE',)))
 

@@ -26,8 +26,10 @@ class GFSChunkserver(process):
         send(('CHUNK_FILE_NAME',filename),to= sender)
 
     def write(chunkuuid, chunk):
+        output('Writing chunk', chunk, chunkuuid)
         try:
             localFilename = self.chunkFileName(chunkuuid)
+            output('filename', localFilename)
             with open(localFilename, "w") as f:
                 f.write(chunk)
             self.chunktable[chunkuuid] = localFilename
