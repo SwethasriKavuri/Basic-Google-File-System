@@ -8,6 +8,7 @@ class GFSClient(process):
     def setup(master:Master):
         output('Setting up client', master)
         self.master = master
+        self.temp = None
 
     def getNumChunks(size):
         return (size//self.master.chunkSize)
@@ -16,8 +17,13 @@ class GFSClient(process):
         res = True
         output('Searching for file', fileName)
         send(('FILE_EXISTS_MASTER', fileName), to= master)                 # send and await message from master server
-        await(received(('FILE_EXISTS_MASTER_DONE', res), from_=master))
-        output('Hi',res)
+        # await(received(('FILE_EXISTS_MASTER_DONE',res)))
+        await(self.temp != None)
+        output('Hi',self.temp)
+
+    def receive(msg=('FILE_EXISTS_MASTER_DONE',res), from_=m):
+        output("received response from master")
+        self.temp = res
 
     def receive(msg= ('WRITE_MSG', threadId, fileName, dataToWrite)):
         if(exists(fileName)):
