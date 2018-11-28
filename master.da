@@ -75,6 +75,7 @@ class Master(process):
         res = exists(fileName)
         output(res, client)
         send(('FILE_EXISTS_MASTER_DONE', res), to=client)
+        output("RES sent : ", res)
         
     def exists(fileName):
         output('Checking file', fileName)
