@@ -52,9 +52,21 @@ class GFSClient(process):
         chunks = [ dataToWrite[x: x+self.chunkSize] for x in range(0, len(dataToWrite), self.chunkSize) ]
         for i in range(0, len(chunkuuids)):
             chunkloc = chunkStore[chunkuuids[i]]
-            output(chunkloc)
-            send(('WRITE_CHUNK', chunkuuids[i], chunks[i]), to= chunkServerStore[chunkloc])      # send and await message from chunk server
-        
+            output(chunkloc, chunkServerStore[chunkloc[0]])
+            c= logical_clock()
+            chunkServerLocal = []
+            chunkLocLength = len(chunkloc)
+            for j in range(1, chunkLocLength):
+                chunkServerLocal.append(chunkServerStore[chunkloc[j]])
+            
+            send(('STORE_DATA', chunkloc[1:], chunkuuids[i], chunks[i],chunkServerLocal, c), to= chunkServerStore[chunkloc[0]])
+            await(some(received(('STORE_DATA_DONE', c2, chunkuuid2)),
+                             has= c2 > c and chunkuuids[i] == chunkuuid2 ))
+            
+            send(('WRITE_CHUNK', chunkuuids[i],chunkloc[1:], chunkServerLocal, c), to= chunkServerStore[chunkloc[0]])      # send and await message from chunk server
+            output('After send')
+            await(some(received(('WRITE_CHUNK_DONE',success, chunkuuid3 , c3)), 
+                                    has= c3 > c and chunkuuids[i] == chunkuuid3))     
         
     def receive(msg= ('WRITE_APPEND_MSG', thread_id, fileName, dataToWrite)):
         if not self.exists(fileName):

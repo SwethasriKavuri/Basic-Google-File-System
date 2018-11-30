@@ -9,14 +9,30 @@ class GFSChunkserver(process):
         output('Setting up chunk', chunkloc)
         self.chunkloc = chunkloc
         self.chunktable = {}
+        self.localStore = {} # stores the uuid and data corresponding to it
         self.localFilesystemRoot = "/tmp/gfs/chunks/" + repr(chunkloc)
         if not os.access(self.localFilesystemRoot, os.W_OK):
             os.makedirs(self.localFilesystemRoot)
 
-    def receive(msg= ('WRITE_CHUNK',chunkuuid,chunk),from_ = sender):
-        success = write(chunkuuid,chunk)
-        send(('WRITE_CHUNK_DONE',success),to= sender)
-
+    def receive(msg= ('WRITE_CHUNK',chunkuuid, chunkloc,chunkServerLocal, c),from_ = sender):
+        output('Inside write chunk method')
+        for i in range(0, len(chunkServerLocal)):
+            c1 = logical_clock()
+            send(('WRITE_CHUNK_SECONDARY',chunkuuid, c1), to = chunkServerLocal[i])
+            await(some(received(('WRITE_CHUNK_SECONDARY_DONE',success, chunkuuid2 , c2)), 
+                                    has= c2 > c and chunkuuid == chunkuuid2))
+            output('Written',i)
+        success = write(chunkuuid,self.localStore[chunkuuid])
+        del self.localStore[chunkuuid]
+        send(('WRITE_CHUNK_DONE',success, chunkuuid , c+1),to= sender)
+    
+    def receive(msg= ('WRITE_CHUNK_SECONDARY',chunkuuid, c),from_ = sender):
+        output('Inside write secondary')
+        success = write(chunkuuid, self.localStore[chunkuuid])
+        del self.localStore[chunkuuid]
+        output('Written in secondary')
+        send(('WRITE_CHUNK_SECONDARY_DONE',success, chunkuuid, c +1),to= sender)
+     
     def receive(msg= ('READ_CHUNK',chunkuuid),from_ = sender):
         chunk = read(chunkuuid)
         send(('READ_CHUNK_DONE',chunk),to= sender)
@@ -24,6 +40,15 @@ class GFSChunkserver(process):
     def receive(msg= ('GET_FILE_NAME',chunkuuid),from_ = sender):
         filename = chunkFileName(chunkuuid)
         send(('CHUNK_FILE_NAME',filename),to= sender)
+    
+    def receive(msg= ('STORE_DATA', chunkloc, chunkuuid, chunk,chunkServerLocal, c), from_ = sender):
+        output('Inside Store data', chunkuuid, chunk)
+        self.localStore[chunkuuid] = chunk
+        if(len(chunkServerLocal)>0):    
+            send(('STORE_DATA', chunkloc[1:], chunkuuid, chunk,chunkServerLocal[1:], c ), to= chunkServerLocal[0])
+            await(some(received(('STORE_DATA_DONE', c2, chunkuuid2)),
+                             has= c2 > c and chunkuuid == chunkuuid2 ))
+        send(('STORE_DATA_DONE',c+1, chunkuuid ), to = sender)
 
     def write(chunkuuid, chunk):
         output('Writing chunk', chunk, chunkuuid)
@@ -33,6 +58,7 @@ class GFSChunkserver(process):
             with open(localFilename, "w") as f:
                 f.write(chunk)
             self.chunktable[chunkuuid] = localFilename
+            output('File written')
             return True
         except:
             return False

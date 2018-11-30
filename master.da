@@ -15,10 +15,11 @@ class Master(process):
         self.fileStore = {}                 # Maps filename to chunkuuids
         self.chunkStore = {}                # Maps chunkuuids to chunk locations
         self.chunkServerStore = {}          # Maps chunk location to physical server/storage
-        self.numChunkServer = 2
+        self.numChunkServer = 5
         self.chunkSize = 20
         self.counter = 0
         self.res = False
+        self.numReplicas = 2
         self.initChunks()
         
     
@@ -37,7 +38,11 @@ class Master(process):
             chunkuuid = uuid.uuid4()
             chunkLocation = self.counter
             chunkuuids.append(chunkuuid)
-            self.chunkStore[chunkuuid] = chunkLocation
+            chunkLocations = [chunkLocation]
+            for j in range(0, numReplicas):
+                counterTemp = (self.counter+j+1) % self.numChunkServer
+                chunkLocations.append(counterTemp)
+            self.chunkStore[chunkuuid] = chunkLocations
             self.counter = (self.counter+1) % self.numChunkServer
         return chunkuuids
      
@@ -88,9 +93,6 @@ class Master(process):
         if fileName in self.fileStore:
             return True
         return False
-
-    def abc():
-        return self.chunkSize
         
     def run():
         await(received(('DONE',)))
