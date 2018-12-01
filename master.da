@@ -50,8 +50,8 @@ class Master(process):
         output('Inside master to write', fileName)
         chunkuuids = self.allocate(fileName, numChunks)
         output('In master chunks', chunkuuids)
-        send(('ALLOC_DONE', pid, fileName, chunkuuids, c+1, chunkServerStore, chunkStore ), to=client)       
-    
+        send(('ALLOC_DONE', pid, fileName, chunkuuids, c+1, chunkServerStore, chunkStore ), to=client)
+
     def allocate(fileName, numChunks):
         chunkuuids = self.allocateChunks(numChunks)
         output('Chunks allocated')
@@ -60,7 +60,10 @@ class Master(process):
     
     def receive(msg = ('ALLOC_MASTER_APPEND', pid, fileName, numChunks), from_=client):
         chunkuuids = self.allocate_append(fileName, numChunks)
-        send(('ALLOC_APPEND_DONE', pid, fileName, chunkuuids, self.chunkServerStore, self.chunkStore ), to=client)    
+        send(('ALLOC_APPEND_DONE', pid, fileName, chunkuuids, self.chunkServerStore, self.chunkStore ), to=client)
+
+    def receive(msg = ('READ_MASTER', pid, fileName,c), from_=client):
+        send(('READ_MASTER_DONE', pid, fileName, c+1, self.chunkServerStore,self.fileStore,self.chunkStore), to=client)          
     
     def allocate_append(fileName, numChunks):
         chunkuuids = self.allocateChunks(numChunks)
