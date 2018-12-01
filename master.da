@@ -16,6 +16,7 @@ class Master(process):
         self.chunkStore = {}                # Maps chunkuuids to chunk locations
         self.chunkServerStore = {}          # Maps chunk location to physical server/storage
         self.lastChunkOfFileStore = {}      # Maps every file with last chunkid and length of last chunk
+        self.deletedChunksList = []
         self.numChunkServer = 5
         self.chunkSize = 10
         self.counter = 0
@@ -91,12 +92,16 @@ class Master(process):
     def receive(msg = ('DELETE_FILE_MASTER', pid, fileName), from_=client):
         fileDeleted = delete(fileName)
         if fileDeleted:
-            send(('DELETE_FILE_MASTER_DONE', pid, fileName), to=client)    
+            send(('DELETE_FILE_MASTER_DONE', pid, fileName), to=client)
+        elif timeout(6):
+            pass
+
         
     def delete(fileName):
         try:
-            chunkuuids = self.fileStore[fileName]
-            del self.fileStore[fileName]
+            for i in range(0, len(fileStore[fileName])):
+                deletedChunksList.append(fileStore[fileName][i])
+            del fileStore[fileName]
             return True
         except:
             output('Error while deleting file')
