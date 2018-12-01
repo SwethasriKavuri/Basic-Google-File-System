@@ -15,8 +15,9 @@ class Master(process):
         self.fileStore = {}                 # Maps filename to chunkuuids
         self.chunkStore = {}                # Maps chunkuuids to chunk locations
         self.chunkServerStore = {}          # Maps chunk location to physical server/storage
+        self.lastChunkOfFileStore = {}      # Maps every file with last chunkid and length of last chunk
         self.numChunkServer = 5
-        self.chunkSize = 20
+        self.chunkSize = 10
         self.counter = 0
         self.res = False
         self.numReplicas = 2
@@ -58,18 +59,34 @@ class Master(process):
         self.fileStore[fileName] = chunkuuids
         return chunkuuids
     
-    def receive(msg = ('ALLOC_MASTER_APPEND', pid, fileName, numChunks), from_=client):
+    def receive(msg = ('ALLOC_APPEND_MASTER', pid, fileName, numChunks, c), from_=client):
         chunkuuids = self.allocate_append(fileName, numChunks)
-        send(('ALLOC_APPEND_DONE', pid, fileName, chunkuuids, self.chunkServerStore, self.chunkStore ), to=client)
+        send(('ALLOC_APPEND_DONE', pid, fileName, chunkuuids, c+1, chunkServerStore, chunkStore ), to=client)
+
 
     def receive(msg = ('READ_MASTER', pid, fileName,c), from_=client):
         send(('READ_MASTER_DONE', pid, fileName, c+1, self.chunkServerStore,self.fileStore,self.chunkStore), to=client)          
+
     
     def allocate_append(fileName, numChunks):
         chunkuuids = self.allocateChunks(numChunks)
         chunkuuids_initial = self.fileStore[fileName]
         chunkuuids_initial.extend(chunkuuids)
+        output('Allocate_append', chunkuuids_initial)
         return chunkuuids
+
+    def receive(msg = ('UPDATE_LAST_CHUNK_DATA', fileName, chunkuuid, chunklen), from_=client):
+        self.lastChunkOfFileStore[fileName] = [chunkuuid, chunklen]
+
+    def receive(msg = ('GET_LAST_CHUNK_DATA', fileName, c), from_=client):
+        chunkuuid = lastChunkOfFileStore[fileName][0]
+        currChunkLen = lastChunkOfFileStore[fileName][1]
+        chunkLocList = chunkStore[lastChunkOfFileStore[fileName][0]]
+        chunkServerLocal = []
+        for j in range(0, len(chunkLocList)):
+            chunkServerLocal.append(chunkServerStore[chunkLocList[j]])
+        send(('GET_LAST_CHUNK_DATA_DONE', fileName, chunkuuid, currChunkLen, chunkLocList, chunkServerLocal, c+1), to= client)
+
     
     def receive(msg = ('DELETE_FILE_MASTER', pid, fileName), from_=client):
         fileDeleted = delete(fileName)

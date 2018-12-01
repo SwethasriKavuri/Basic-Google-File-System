@@ -46,10 +46,10 @@ class GFSClient(process):
         send(('ALLOC_MASTER', threadId, fileName, numChunks, c), to= master)           # send and await message from master server
         await(some(received(('ALLOC_DONE',  pid, fileName1, chunkuuids, c2, chunkServerStore, chunkStore)),
                              has= c2 > c and fileName == fileName1 ))
-        self.writeChunks(chunkuuids, dataToWrite, chunkServerStore, chunkStore)
+        self.writeChunks(chunkuuids, dataToWrite, chunkServerStore, chunkStore, fileName)
         send(('WRITTEN',fileName), to=nodeof(self))
 
-    def writeChunks(chunkuuids, dataToWrite, chunkServerStore, chunkStore):
+    def writeChunks(chunkuuids, dataToWrite, chunkServerStore, chunkStore, fileName):
         output('inside write chunks', chunkStore)
         chunks = [ dataToWrite[x: x+self.chunkSize] for x in range(0, len(dataToWrite), self.chunkSize) ]
         for i in range(0, len(chunkuuids)):
@@ -60,23 +60,49 @@ class GFSClient(process):
             chunkLocLength = len(chunkloc)
             for j in range(1, chunkLocLength):
                 chunkServerLocal.append(chunkServerStore[chunkloc[j]])
-            
             send(('STORE_DATA', chunkloc[1:], chunkuuids[i], chunks[i],chunkServerLocal, c), to= chunkServerStore[chunkloc[0]])
             await(some(received(('STORE_DATA_DONE', c2, chunkuuid2)),
                              has= c2 > c and chunkuuids[i] == chunkuuid2 ))
-            
-            send(('WRITE_CHUNK', chunkuuids[i],chunkloc[1:], chunkServerLocal, c), to= chunkServerStore[chunkloc[0]])      # send and await message from chunk server
+            send(('WRITE_CHUNK', chunkuuids[i],chunkloc[1:], chunkServerLocal, c, False), to= chunkServerStore[chunkloc[0]])      # send and await message from chunk server
+            output('After send')
             await(some(received(('WRITE_CHUNK_DONE',success, chunkuuid3 , c3)), 
-                                    has= c3 > c and chunkuuids[i] == chunkuuid3))
-            
-    def receive(msg= ('WRITE_APPEND_MSG', thread_id, fileName, dataToWrite)):
+                                    has= c3 > c and chunkuuids[i] == chunkuuid3))   
+        send(('UPDATE_LAST_CHUNK_DATA', fileName, chunkuuids[-1], len(chunks[-1])), to= master)  
+        
+    def receive(msg= ('WRITE_APPEND_MSG', threadId, fileName, dataToWrite)):
         if not self.exists(fileName):
-            raise Exception("append error, file does not exist: " + fileName)
+            raise Exception("Append error, file does not exist: " + fileName)
         numChunks = self.getNumChunks(len(dataToWrite))
-        chunkuuids = []
-        send(('ALLOC_APPEND_MASTER', fileName, numChunks), to= master)
-        await(received(('ALLOC_APPEND_DONE', chunkuuids), from_=master))        # send and await message from master server
-        self.writeChunks(chunkuuids, dataToWrite)
+        toAppend = False
+        if(numChunks == 1):
+            c = logical_clock()
+            send(('GET_LAST_CHUNK_DATA', fileName, c), to= master)
+            await(some(received(('GET_LAST_CHUNK_DATA_DONE', fileName1, chunkuuid, currChunkLen, chunkLocList, chunkServerLocal, c3)), 
+                                    has= c3 > c and fileName == fileName1))
+            if(len(dataToWrite) <= (self.chunkSize - currChunkLen)):
+                addToExistingChunkFile(fileName1, chunkuuid, currChunkLen, chunkLocList, chunkServerLocal, dataToWrite)
+        else:
+            chunkuuids = []
+            c = logical_clock()
+            output('IN append else')
+            send(('ALLOC_APPEND_MASTER', threadId, fileName, numChunks, c), to= master)
+            await(some(received(('ALLOC_APPEND_DONE',  pid, fileName1, chunkuuids, c2, chunkServerStore, chunkStore)),
+                                 has= c2 > c and fileName == fileName1 ))
+            output('After await')
+            self.writeChunks(chunkuuids, dataToWrite, chunkServerStore, chunkStore, fileName)
+
+    def addToExistingChunkFile(fileName, chunkuuid, currChunkLen, chunkLocList, chunkServerLocal, dataToWrite):
+        output('inside addToExistingChunkFile', chunkuuid)
+        c = logical_clock()
+        send(('STORE_DATA', chunkLocList[1:], chunkuuid, dataToWrite, chunkServerLocal[1:], c), to= chunkServerLocal[0])
+        await(some(received(('STORE_DATA_DONE', c2, chunkuuid2)),
+                         has= c2 > c and chunkuuid == chunkuuid2 ))
+        send(('WRITE_CHUNK', chunkuuid,chunkLocList[1:], chunkServerLocal[1:], c, True), to= chunkServerLocal[0])      # send and await message from chunk server
+        output('After send')
+        await(some(received(('WRITE_CHUNK_DONE',success, chunkuuid3 , c3)), 
+                                has= c3 > c and chunkuuid == chunkuuid3))   
+        send(('UPDATE_LAST_CHUNK_DATA', fileName, chunkuuid, len(dataToWrite)+currChunkLen), to= master)  
+        
 
     def receive(msg= ('READ_MSG', threadId, fileName)):
         if not self.exists(fileName):
@@ -129,5 +155,7 @@ def main():
     send(('READ_MSG', 1, 'abc.txt'), to=client1) 
     await(some(received(('READ_FILE_DONE',dataRead,fileName2)), 
                                     has=fileName == fileName2))
-    output(dataRead)
+    output('THIS IS THE DATA READ!!!!!',dataRead)
+    s2 = 'Append 1234'
+    send(('WRITE_APPEND_MSG', 1, 'abc.txt', s2), to=client1)
     await(received(('DONE',)))

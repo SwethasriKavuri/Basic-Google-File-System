@@ -14,21 +14,21 @@ class GFSChunkserver(process):
         if not os.access(self.localFilesystemRoot, os.W_OK):
             os.makedirs(self.localFilesystemRoot)
 
-    def receive(msg= ('WRITE_CHUNK',chunkuuid, chunkloc,chunkServerLocal, c),from_ = sender):
+    def receive(msg= ('WRITE_CHUNK',chunkuuid, chunkloc,chunkServerLocal, c, toAppend),from_ = sender):
         output('Inside write chunk method')
         for i in range(0, len(chunkServerLocal)):
             c1 = logical_clock()
-            send(('WRITE_CHUNK_SECONDARY',chunkuuid, c1), to = chunkServerLocal[i])
+            send(('WRITE_CHUNK_SECONDARY',chunkuuid, toAppend, c1), to = chunkServerLocal[i])
             await(some(received(('WRITE_CHUNK_SECONDARY_DONE',success, chunkuuid2 , c2)), 
                                     has= c2 > c and chunkuuid == chunkuuid2))
             output('Written',i)
-        success = write(chunkuuid,self.localStore[chunkuuid])
+        success = write(chunkuuid,self.localStore[chunkuuid], toAppend)
         del self.localStore[chunkuuid]
         send(('WRITE_CHUNK_DONE',success, chunkuuid , c+1),to= sender)
     
-    def receive(msg= ('WRITE_CHUNK_SECONDARY',chunkuuid, c),from_ = sender):
+    def receive(msg= ('WRITE_CHUNK_SECONDARY',chunkuuid, toAppend, c),from_ = sender):
         output('Inside write secondary')
-        success = write(chunkuuid, self.localStore[chunkuuid])
+        success = write(chunkuuid, self.localStore[chunkuuid], toAppend)
         del self.localStore[chunkuuid]
         output('Written in secondary')
         send(('WRITE_CHUNK_SECONDARY_DONE',success, chunkuuid, c +1),to= sender)
@@ -50,13 +50,17 @@ class GFSChunkserver(process):
                              has= c2 > c and chunkuuid == chunkuuid2 ))
         send(('STORE_DATA_DONE',c+1, chunkuuid ), to = sender)
 
-    def write(chunkuuid, chunk):
+    def write(chunkuuid, chunk, toAppend):
         output('Writing chunk', chunk, chunkuuid)
         try:
             localFilename = self.chunkFileName(chunkuuid)
             output('filename', localFilename)
+            str=""
+            if toAppend:
+               str+= read(chunkuuid)
+            str+=chunk
             with open(localFilename, "w") as f:
-                f.write(chunk)
+                f.write(str)
             self.chunktable[chunkuuid] = localFilename
             output('File written')
             return True
