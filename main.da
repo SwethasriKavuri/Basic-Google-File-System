@@ -1,0 +1,25 @@
+import sys, time
+from master import Master
+from client import GFSClient
+config(channel is fifo, clock is lamport)
+
+def main():
+    master1 = new(Master)
+    setup(master1, ())
+    start(master1)
+    client1 = new(GFSClient)
+    setup(client1, (master1,))
+    start(client1)
+    s1 = 'Hi testing 123'
+    s2 = 'Hi testing 456'
+    fileName = 'abc.txt'
+    send(('WRITE_MSG', 1, 'abc.txt', s1), to=client1)
+    await(some(received(('WRITTEN', fileName2)), 
+                                    has=fileName == fileName2))
+    send(('READ_MSG', 1, 'abc.txt'), to=client1) 
+    await(some(received(('READ_FILE_DONE',dataRead,fileName2)), 
+                                    has=fileName == fileName2))
+    output('THIS IS THE DATA READ!!!!!',dataRead)
+    s2 = 'Append 123'
+    send(('WRITE_APPEND_MSG', 1, 'abc.txt', s2), to=client1)
+    await(received(('DONE',)))
