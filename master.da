@@ -95,7 +95,6 @@ class Master(process):
             send(('DELETE_FILE_MASTER_DONE', pid, fileName), to=client)
         elif timeout(6):
             pass
-
         
     def delete(fileName):
         try:

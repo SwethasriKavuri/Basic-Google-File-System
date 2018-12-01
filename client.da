@@ -74,7 +74,7 @@ class GFSClient(process):
             raise Exception("Append error, file does not exist: " + fileName)
         numChunks = self.getNumChunks(len(dataToWrite))
         toAppend = False
-        if(numChunks == 1):
+        if((numChunks == 1) and (len(dataToWrite) != self.chunkSize)):
             c = logical_clock()
             send(('GET_LAST_CHUNK_DATA', fileName, c), to= master)
             await(some(received(('GET_LAST_CHUNK_DATA_DONE', fileName1, chunkuuid, currChunkLen, chunkLocList, chunkServerLocal, c3)), 
@@ -156,6 +156,6 @@ def main():
     await(some(received(('READ_FILE_DONE',dataRead,fileName2)), 
                                     has=fileName == fileName2))
     output('THIS IS THE DATA READ!!!!!',dataRead)
-    s2 = 'Append 1234'
+    s2 = 'Append 123'
     send(('WRITE_APPEND_MSG', 1, 'abc.txt', s2), to=client1)
     await(received(('DONE',)))
