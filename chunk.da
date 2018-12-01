@@ -33,9 +33,9 @@ class GFSChunkserver(process):
         output('Written in secondary')
         send(('WRITE_CHUNK_SECONDARY_DONE',success, chunkuuid, c +1),to= sender)
      
-    def receive(msg= ('READ_CHUNK',chunkuuid),from_ = sender):
+    def receive(msg= ('READ_CHUNK',chunkuuid,c),from_ = sender):
         chunk = read(chunkuuid)
-        send(('READ_CHUNK_DONE',chunk),to= sender)
+        send(('READ_CHUNK_DONE',chunk,c+1),to= sender)
 
     def receive(msg= ('GET_FILE_NAME',chunkuuid),from_ = sender):
         filename = chunkFileName(chunkuuid)
