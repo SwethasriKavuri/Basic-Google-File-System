@@ -3,6 +3,7 @@ from  master import Master
 from random import randint
 from math import ceil
 config(channel is fifo, clock is lamport)
+from functools import reduce
 
 
 class GFSClient(process):
@@ -46,6 +47,7 @@ class GFSClient(process):
         await(some(received(('ALLOC_DONE',  pid, fileName1, chunkuuids, c2, chunkServerStore, chunkStore)),
                              has= c2 > c and fileName == fileName1 ))
         self.writeChunks(chunkuuids, dataToWrite, chunkServerStore, chunkStore)
+        send(('WRITTEN',fileName), to=nodeof(self))
 
     def writeChunks(chunkuuids, dataToWrite, chunkServerStore, chunkStore):
         output('inside write chunks', chunkStore)
@@ -64,10 +66,9 @@ class GFSClient(process):
                              has= c2 > c and chunkuuids[i] == chunkuuid2 ))
             
             send(('WRITE_CHUNK', chunkuuids[i],chunkloc[1:], chunkServerLocal, c), to= chunkServerStore[chunkloc[0]])      # send and await message from chunk server
-            output('After send')
             await(some(received(('WRITE_CHUNK_DONE',success, chunkuuid3 , c3)), 
-                                    has= c3 > c and chunkuuids[i] == chunkuuid3))     
-        
+                                    has= c3 > c and chunkuuids[i] == chunkuuid3))
+            
     def receive(msg= ('WRITE_APPEND_MSG', thread_id, fileName, dataToWrite)):
         if not self.exists(fileName):
             raise Exception("append error, file does not exist: " + fileName)
@@ -77,19 +78,26 @@ class GFSClient(process):
         await(received(('ALLOC_APPEND_DONE', chunkuuids), from_=master))        # send and await message from master server
         self.writeChunks(chunkuuids, dataToWrite)
 
-    def receive(msg= ('READ_MSG', thread_id, fileName)):
+    def receive(msg= ('READ_MSG', threadId, fileName)):
         if not self.exists(fileName):
             raise Exception("read error, file does not exist: " + fileName)
         chunks = []
-        chunkuuids = self.master.filetable[fileName]
-        chunkservers = self.master.chunkservers
+        c = logical_clock()
+        send(('READ_MASTER', threadId, fileName,c), to= master)
+        await(some(received(('READ_MASTER_DONE',  pid, fileName1, c2, chunkServerStore,filetable,chunkStore)),
+                             has= c2 > c and fileName == fileName1))
+        chunkuuids = filetable[fileName]
         for chunkuuid in chunkuuids:
-            chunkloc = self.master.chunktable(chunkuuid)
-            send(('READ_CHUNK', chunkservers[chunkloc], chunkuuid), to= chunk)      # send and await message from chunk server
-            await(received(('READ_CHUNK_DONE', chunk), from_= chunk))
+            c = logical_clock()
+            chunkloc = chunkStore[chunkuuid]
+            for chunklocation in chunkloc:
+                send(('READ_CHUNK',chunkuuid,c), to= chunkServerStore[chunklocation])
+            await(some(received(('READ_CHUNK_DONE',chunk,c2)),
+                             has= c2 > c ))
             chunks.append(chunk)
-        data_read = reduce(lambda x, y: x+y, chunks)
-        return data_read
+        dataRead = reduce(lambda x, y: x+y, chunks)
+        send(('READ_FILE_DONE',dataRead,fileName), to=nodeof(self))
+        return dataRead
 
     def receive(msg= ('DELETE', thread_id, fileName)):
         send(('DELETE_FILE_MASTER', fileName), to= master)                         # send and await message from master server
@@ -97,7 +105,6 @@ class GFSClient(process):
         if await(some(received(('DELETE_FILE_MASTER_DONE', res, fileName1, c2)),
                              has= c2 > c and fileName == fileName1)):
             output('File deleted successfully', fileName)
-            #send('FILE_DELETED_DONE', )
         elif timeout(10):
             output('Failed to delete file')
         
@@ -114,5 +121,13 @@ def main():
     setup(client1, (master1,))
     start(client1)
     s1 = 'Hi testing 123'
-    send(('WRITE_MSG', 1, 'abc.txt', s1), to=client1) 
+    s2 = 'Hi testing 456'
+    fileName = 'abc.txt'
+    send(('WRITE_MSG', 1, 'abc.txt', s1), to=client1)
+    await(some(received(('WRITTEN', fileName2)), 
+                                    has=fileName == fileName2))
+    send(('READ_MSG', 1, 'abc.txt'), to=client1) 
+    await(some(received(('READ_FILE_DONE',dataRead,fileName2)), 
+                                    has=fileName == fileName2))
+    output(dataRead)
     await(received(('DONE',)))
