@@ -1,0 +1,51 @@
+"""
+Created on Sat Dec  1 18:17:36 2018
+
+@author: risabh
+"""
+import time
+config(channel is fifo, clock is lamport)
+
+class HeartBeat(process):
+    
+    def setup(master:Master):
+        output('Setting up HeartBeat')
+        self.heartBeatFromChunks = set()
+        self.availableChunkServers = set()
+        self.master = master
+        
+    def sendHeartBeat():
+        output('Inside Send Heart Beat')
+        """send(('START_HEARTBEAT',), to = nodeof(self))
+        
+    def receive(msg =('START_HEARTBEAT',), from_=a):
+        output('Inside Heart Beat')"""
+        self.heartBeatFromChunks = set()
+        self.availableChunkServers = set()
+        
+        send(('GET_AVAILABLE_CHUNK_SERVERS',), to = master)
+        await(len(self.availableChunkServers)!=0)
+        output(self.availableChunkServers)
+        for chunkServer in self.availableChunkServers:
+            send(('HEARTBEAT',), to = chunkServer)
+        if await(len(self.availableChunkServers) == len(self.heartBeatFromChunks)):
+            output('All chunk servers are responding')
+        elif timeout(10):
+            output('Inside else if', self.heartBeatFromChunks)
+            for chunkServer in self.availableChunkServers:
+                if chunkServer not in self.heartBeatFromChunks:
+                    output(chunkServer, ": Chunk Server is down")
+            self.availableChunkServers = self.heartBeatFromChunks
+        send(('UPDATE_AVAILABLE_CHUNK_SERVERS', self.availableChunkServers), to = master)
+     
+    def receive(msg=('AVAILABLE_CHUNK_SERVERS', availableChunkServers), from_=master):
+        self.availableChunkServers = availableChunkServers
+        
+    def receive(msg=('HEARTBEAT_ACKNOWLEDGED',), from_=chunkServer):
+        output("Heart beat received from", chunkServer)
+        self.heartBeatFromChunks.add(chunkServer) 
+
+    def run():
+        while True:
+            sendHeartBeat()
+            time.sleep(5)            

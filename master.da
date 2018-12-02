@@ -4,7 +4,9 @@ Created on Mon Nov 26 18:05:06 2018
 @author: risabh
 """
 
+from HeartBeat import HeartBeat
 import uuid
+import time
 from chunk import GFSChunkserver
 config(channel is fifo, clock is lamport)
 
@@ -22,6 +24,7 @@ class Master(process):
         self.counter = 0
         self.res = False
         self.numReplicas = 2
+        self.availableChunkServers = set()
         self.initChunks()
         
     
@@ -32,6 +35,7 @@ class Master(process):
             setup(chunkServer, (i,))
             start(chunkServer)
             self.chunkServerStore[i] = chunkServer
+            self.availableChunkServers.add(chunkServer)
     
     def allocateChunks(numChunks):
         output('Allocating chunks')
@@ -41,9 +45,12 @@ class Master(process):
             chunkLocation = self.counter
             chunkuuids.append(chunkuuid)
             chunkLocations = [chunkLocation]
-            for j in range(0, numReplicas):
+            j=0
+            while len(chunkLocations)<numReplicas:
                 counterTemp = (self.counter+j+1) % self.numChunkServer
-                chunkLocations.append(counterTemp)
+                j+=1
+                if self.chunkServerStore[counterTemp] in self.availableChunkServers:
+                    chunkLocations.append(counterTemp)
             self.chunkStore[chunkuuid] = chunkLocations
             self.counter = (self.counter+1) % self.numChunkServer
         return chunkuuids
@@ -52,7 +59,8 @@ class Master(process):
         output('Inside master to write', fileName)
         chunkuuids = self.allocate(fileName, numChunks)
         output('In master chunks', chunkuuids)
-        send(('ALLOC_DONE', pid, fileName, chunkuuids, c+1, chunkServerStore, chunkStore ), to=client)
+        send(('ALLOC_DONE', pid, fileName, chunkuuids, c+1, chunkServerStore,
+                 chunkStore ), to=client)
 
     def allocate(fileName, numChunks):
         chunkuuids = self.allocateChunks(numChunks)
@@ -62,11 +70,13 @@ class Master(process):
     
     def receive(msg = ('ALLOC_APPEND_MASTER', pid, fileName, numChunks, c), from_=client):
         chunkuuids = self.allocate_append(fileName, numChunks)
-        send(('ALLOC_APPEND_DONE', pid, fileName, chunkuuids, c+1, chunkServerStore, chunkStore ), to=client)
+        send(('ALLOC_APPEND_DONE', pid, fileName, chunkuuids, c+1,
+                 chunkServerStore, chunkStore ), to=client)
 
 
     def receive(msg = ('READ_MASTER', pid, fileName,c), from_=client):
-        send(('READ_MASTER_DONE', pid, fileName, c+1, self.chunkServerStore,self.fileStore,self.chunkStore), to=client)          
+        send(('READ_MASTER_DONE', pid, fileName, c+1, 
+        self.chunkServerStore, self.fileStore, self.chunkStore), to=client)          
 
     
     def allocate_append(fileName, numChunks):
@@ -86,7 +96,8 @@ class Master(process):
         chunkServerLocal = []
         for j in range(0, len(chunkLocList)):
             chunkServerLocal.append(chunkServerStore[chunkLocList[j]])
-        send(('GET_LAST_CHUNK_DATA_DONE', fileName, chunkuuid, currChunkLen, chunkLocList, chunkServerLocal, c+1), to= client)
+        send(('GET_LAST_CHUNK_DATA_DONE', fileName, chunkuuid, currChunkLen,
+             chunkLocList, chunkServerLocal, c+1), to= client)
 
     
     def receive(msg = ('DELETE_FILE_MASTER', pid, fileName), from_=client):
@@ -94,8 +105,8 @@ class Master(process):
         if fileDeleted:
             send(('DELETE_FILE_MASTER_DONE', pid, fileName), to=client)
         elif timeout(6):
-            pass
-        
+            pass   
+    
     def delete(fileName):
         try:
             for i in range(0, len(fileStore[fileName])):
@@ -117,8 +128,17 @@ class Master(process):
         if fileName in self.fileStore:
             return True
         return False
+    
+    def receive(msg = ('GET_AVAILABLE_CHUNK_SERVERS', ), from_=heartBeat):
+        send(('AVAILABLE_CHUNK_SERVERS',self.availableChunkServers), to = heartBeat)
+    
+    def receive(msg = ('UPDATE_AVAILABLE_CHUNK_SERVERS', availableChunkServers), from_= heartBeat):
+        self.availableChunkServers = availableChunkServers
         
     def run():
+        heartBeat =  new(HeartBeat)
+        setup(heartBeat, (self,))
+        start(heartBeat)
         await(received(('DONE',)))
 
     

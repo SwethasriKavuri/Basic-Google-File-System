@@ -79,5 +79,8 @@ class GFSChunkserver(process):
             + str(chunkuuid) + '.gfs'
         return localFilename
 
+    def receive(msg =('HEARTBEAT',), from_= heartBeat):
+        send(('HEARTBEAT_ACKNOWLEDGED',), to=heartBeat)
+        
     def run():
          await(received(('DONE',)))
