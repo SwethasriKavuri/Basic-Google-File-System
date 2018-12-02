@@ -22,4 +22,7 @@ def main():
     output('THIS IS THE DATA READ!!!!!',dataRead)
     s2 = 'Append 123'
     send(('WRITE_APPEND_MSG', 1, 'abc.txt', s2), to=client1)
+    time.sleep(2)
+    send(('DELETE', 1, 'abc.txt'), to = client1)
     await(received(('DONE',)))
+    

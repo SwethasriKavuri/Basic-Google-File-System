@@ -18,7 +18,7 @@ class Master(process):
         self.chunkStore = {}                # Maps chunkuuids to chunk locations
         self.chunkServerStore = {}          # Maps chunk location to physical server/storage
         self.lastChunkOfFileStore = {}      # Maps every file with last chunkid and length of last chunk
-        self.deletedChunksList = []
+        self.deletedChunksList = {}
         self.numChunkServer = 5
         self.chunkSize = 10
         self.counter = 0
@@ -100,18 +100,25 @@ class Master(process):
              chunkLocList, chunkServerLocal, c+1), to= client)
 
     
-    def receive(msg = ('DELETE_FILE_MASTER', pid, fileName), from_=client):
+    def receive(msg = ('DELETE_FILE_MASTER', pid, fileName, c), from_=client):
+        output('Inside delete File master')
         fileDeleted = delete(fileName)
         if fileDeleted:
-            send(('DELETE_FILE_MASTER_DONE', pid, fileName), to=client)
+            send(('DELETE_FILE_MASTER_DONE', pid, fileName, c+1), to=client)
         elif timeout(6):
             pass   
     
     def delete(fileName):
         try:
-            for i in range(0, len(fileStore[fileName])):
-                deletedChunksList.append(fileStore[fileName][i])
+            for chunkuuid in fileStore[fileName]:
+                for chunkLoc in self.chunkStore[chunkuuid]:
+                    if self.chunkServerStore[chunkLoc] not in self.deletedChunksList:
+                        self.deletedChunksList[self.chunkServerStore[chunkLoc]] = []
+                    self.deletedChunksList[self.chunkServerStore[chunkLoc]].append(chunkuuid)
+                    
             del fileStore[fileName]
+            output(fileStore)
+            output(self.deletedChunksList)
             return True
         except:
             output('Error while deleting file')
@@ -134,6 +141,16 @@ class Master(process):
     
     def receive(msg = ('UPDATE_AVAILABLE_CHUNK_SERVERS', availableChunkServers), from_= heartBeat):
         self.availableChunkServers = availableChunkServers
+    
+    def receive(msg = ('DELETE_ORPHANED_CHUNKS',), from_=heartBeat):
+        localChunkList = {}
+        for chunkServer,chunkuuids in self.deletedChunksList.items():
+            if chunkServer in self.availableChunkServers:
+                send(('DELETED_CHUNKS', chunkuuids), to= chunkServer)
+            else:
+                localChunkList[chunkServer] = chunkuuids
+        self.deletedChunksList = localChunkList
+    
         
     def run():
         heartBeat =  new(HeartBeat)

@@ -125,9 +125,9 @@ class GFSClient(process):
         send(('READ_FILE_DONE',dataRead,fileName), to=nodeof(self))
         return dataRead
 
-    def receive(msg= ('DELETE', thread_id, fileName)):
-        send(('DELETE_FILE_MASTER', fileName), to= master)                         # send and await message from master server
+    def receive(msg= ('DELETE', threadId, fileName)):
         c = logical_clock()
+        send(('DELETE_FILE_MASTER', threadId, fileName, c), to= master)                         # send and await message from master server
         if await(some(received(('DELETE_FILE_MASTER_DONE', res, fileName1, c2)),
                              has= c2 > c and fileName == fileName1)):
             output('File ', fileName, ' deleted successfully')
