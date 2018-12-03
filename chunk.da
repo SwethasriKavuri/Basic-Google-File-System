@@ -80,7 +80,8 @@ class GFSChunkserver(process):
         return localFilename
 
     def receive(msg =('HEARTBEAT',), from_= heartBeat):
-        send(('HEARTBEAT_ACKNOWLEDGED',), to=heartBeat)
+        files  = os.listdir(self.localFilesystemRoot)
+        send(('HEARTBEAT_ACKNOWLEDGED',files), to=heartBeat)
     
     def receive(msg =('DELETED_CHUNKS', chunkuuids), from_= master):
         

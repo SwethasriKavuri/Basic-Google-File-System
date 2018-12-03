@@ -143,11 +143,12 @@ class Master(process):
     def receive(msg = ('UPDATE_AVAILABLE_CHUNK_SERVERS', availableChunkServers), from_= heartBeat):
         self.availableChunkServers = availableChunkServers
     
-    def receive(msg = ('DELETE_ORPHANED_CHUNKS',), from_=heartBeat):
+    def receive(msg = ('DELETE_ORPHANED_CHUNKS', fileList), from_=heartBeat):
         localChunkList = {}
         for chunkServer,chunkuuids in self.deletedChunksList.items():
             if chunkServer in self.availableChunkServers:
-                send(('DELETED_CHUNKS', chunkuuids), to= chunkServer)
+                chunkFilesToDelete  = list(set(fileList[chunkServer]) - set(chunkuuids))
+                send(('DELETED_CHUNKS', chunkFilesToDelete), to= chunkServer)
             else:
                 localChunkList[chunkServer] = chunkuuids
         self.deletedChunksList = localChunkList

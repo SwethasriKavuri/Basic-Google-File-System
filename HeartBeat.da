@@ -12,6 +12,7 @@ class HeartBeat(process):
         output('Setting up HeartBeat')
         self.heartBeatFromChunks = set()
         self.availableChunkServers = set()
+        self.filesList = {}
         self.master = master
         
     def sendHeartBeat():
@@ -37,14 +38,18 @@ class HeartBeat(process):
                     output(chunkServer, ": Chunk Server is down")
             self.availableChunkServers = self.heartBeatFromChunks
         send(('UPDATE_AVAILABLE_CHUNK_SERVERS', self.availableChunkServers), to = master)
-        send(('DELETE_ORPHANED_CHUNKS',), to=master)
+        send(('DELETE_ORPHANED_CHUNKS', self.filesList), to=master)
      
     def receive(msg=('AVAILABLE_CHUNK_SERVERS', availableChunkServers), from_=master):
         self.availableChunkServers = availableChunkServers
         
-    def receive(msg=('HEARTBEAT_ACKNOWLEDGED',), from_=chunkServer):
+    def receive(msg=('HEARTBEAT_ACKNOWLEDGED',files), from_=chunkServer):
         output("Heart beat received from", chunkServer)
-        self.heartBeatFromChunks.add(chunkServer) 
+        self.heartBeatFromChunks.add(chunkServer)
+        localFileList = []
+        for file in files:
+            localFileList.append(file[:-4]) 
+        self.filesList[chunkServer] = localFileList 
 
     def run():
         while True:
