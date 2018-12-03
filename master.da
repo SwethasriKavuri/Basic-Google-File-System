@@ -42,7 +42,7 @@ class Master(process):
         output('Allocating chunks')
         chunkuuids = []
         for i in range(0, numChunks):
-            chunkuuid = uuid.uuid4()
+            chunkuuid = str(uuid.uuid4())
             chunkLocation = self.counter
             chunkuuids.append(chunkuuid)
             chunkLocations = [chunkLocation]
@@ -154,27 +154,42 @@ class Master(process):
         self.deletedChunksList = localChunkList
     
 
-    def receive(msg =('ADD_TO_LEASE_Q', fileName, c), from_= client):
+    def receive(msg =('ADD_TO_LEASE_Q', fileName, c, operation), from_= client):
         output('Adding to lease Q from client ', client)
         if fileName not in leaseQueue:
             leaseQueue[fileName] = []
-        leaseQueue[fileName].append(client)
-        checkQueueAndReturn(fileName, client, c)
+        leaseQueue[fileName].append((client,operation))
+        checkQueueAndReturn(fileName, client, c, operation)
 
-    def checkQueueAndReturn(fileName, client, c):
-        if leaseQueue[fileName][0] == client:
+    def checkQueueAndReturn(fileName, client, c, operation):
+        if leaseQueue[fileName][0][0] == client and leaseQueue[fileName][0][1] == operation:
             output('Chance given to ', client)
-            send(('CLIENT_TURN_IN_LEASE_Q', fileName, c+1), to= client)
+            msg  ='CLIENT_TURN_IN_LEASE_Q_'+operation 
+            send((msg, fileName, c+1), to= client)
         else:
             output('Chance not given to ', client)
-            send(('CLIENT_TURN_IN_LEASE_Q', fileName, c), to= client)
+            #send(('CLIENT_TURN_IN_LEASE_Q', fileName, c), to= client)
 
-    def receive(msg =('RECORD_APPEND_NEXT_IN_LEASE_Q', fileName, c), from_= client):
+    def receive(msg =('PROCESS_NEXT_IN_LEASE_Q', fileName, c), from_= client):
         leaseQueue[fileName].pop(0)
         if len(leaseQueue[fileName]) != 0:
             print(leaseQueue[fileName][0])
-            checkQueueAndReturn(fileName, leaseQueue[fileName][0], c)
-        
+            checkQueueAndReturn(fileName, leaseQueue[fileName][0][0], c, leaseQueue[fileName][0][1])
+    
+    def receive(msg=('UPDATE_SNAPSHOT', fileName, c), from_=client):
+        chunkuuids = self.fileStore[fileName]
+        new_chunkuuids = [chunkuuid+'-SNAPSHOT' for chunkuuid in chunkuuids]
+        for chunkuuid in chunkuuids:
+            chunkLoc = self.chunkStore[chunkuuid]
+            del self.chunkStore[chunkuuid]
+            self.chunkStore[chunkuuid+'-SNAPSHOT'] = chunkLoc
+        lastChunkData = lastChunkOfFileStore[fileName]
+        lastChunkData[0] = lastChunkData[0]+'-SNAPSHOT'
+        self.lastChunkOfFileStore[fileName][0] = lastChunkData
+        self.fileStore[fileName] = new_chunkuuids
+        send(('UPDATE_SNAPSHOT_DONE', fileName, c+1), to = client)
+         
+            
     def run():
         heartBeat =  new(HeartBeat)
         setup(heartBeat, (self,))

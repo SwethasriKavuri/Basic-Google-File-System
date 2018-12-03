@@ -74,8 +74,8 @@ class GFSClient(process):
         if not self.exists(fileName):
             raise Exception("Append error, file does not exist: " + fileName)
         c = logical_clock()
-        send(('ADD_TO_LEASE_Q', fileName, c), to= master)
-        await(some(received(('CLIENT_TURN_IN_LEASE_Q', fileName1, c3)), 
+        send(('ADD_TO_LEASE_Q', fileName, c, 'APPEND'), to= master)
+        await(some(received(('CLIENT_TURN_IN_LEASE_Q_APPEND', fileName1, c3)), 
                                 has= c3 > c and fileName == fileName1))
         numChunks = self.getNumChunks(len(dataToWrite))
         toAppend = False
@@ -108,7 +108,7 @@ class GFSClient(process):
             self.writeChunks(chunkuuids, dataToWrite, chunkServerStore, chunkStore, fileName)
         output('DONE WITH RECORD_APPEND ', self)
         c1 = logical_clock()
-        send(('RECORD_APPEND_NEXT_IN_LEASE_Q', fileName, c1), to= master) 
+        send(('PROCESS_NEXT_IN_LEASE_Q', fileName, c1), to= master) 
 
 
     def addToExistingChunkFile(fileName, chunkuuid, currChunkLen, chunkLocList, chunkServerLocal, dataToWrite):
@@ -154,6 +154,35 @@ class GFSClient(process):
             output('File ', fileName, ' deleted successfully')
         elif timeout(5):
             output('Failed to delete file')
+
+    def receive(msg= ('CREATE_SNAPSHOT', threadId, fileName)):
+        if not self.exists(fileName):
+            raise Exception("read error, file does not exist: " + fileName)
+        c = logical_clock()
+        send(('ADD_TO_LEASE_Q', fileName, c, 'SNAPSHOT'), to= master)
+        await(some(received(('CLIENT_TURN_IN_LEASE_Q_SNAPSHOT', fileName1, c3)), 
+                                has= c3 > c and fileName == fileName1))
+        c = logical_clock()
+        send(('READ_MASTER', threadId, fileName,c), to= master)
+        await(some(received(('READ_MASTER_DONE',  pid, fileName1, c2, chunkServerStore,filetable,chunkStore)),
+                             has= c2 > c and fileName == fileName1))
+        chunkuuids = filetable[fileName]
+        res = True
+        for chunkuuid in chunkuuids:
+            chunkloc = chunkStore[chunkuuid]
+            for chunklocation in chunkloc:
+                c = logical_clock()
+                send(('WRITE_CHUNK_SNAPSHOT', chunkuuid,c), to=chunkServerStore[chunklocation])
+                await(some(received(('WRITE_CHUNK_SNAPSHOT_DONE',chunkuuid,c2, res)),has= c2 > c ))
+                if not res:
+                    output('SNAPSHOT creation failed')
+        
+        c = logical_clock()
+        if res:
+           send(('UPDATE_SNAPSHOT', fileName, c ), to=master) 
+           await(some(received(('UPDATE_SNAPSHOT_DONE',fileName, c2)),has= c2 > c ))
+        c1 = logical_clock()
+        send(('PROCESS_NEXT_IN_LEASE_Q', fileName, c1), to= master) 
         
     def run():
         #exists('abxc.txt')   

@@ -89,6 +89,12 @@ class GFSChunkserver(process):
             localFileName = chunkFileName(file)
             if os.path.exists(localFileName):
                 os.remove(localFileName)
+    
+    def receive(msg = ('WRITE_CHUNK_SNAPSHOT', chunkuuid, c), from_=client):
+        chunk = read(chunkuuid)
+        new_chunkuuid = chunkuuid+'-SNAPSHOT'
+        res = write(new_chunkuuid, chunk, False)
+        send(('WRITE_CHUNK_SNAPSHOT_DONE', chunkuuid, c+1, res), to=client)
         
     def run():
          await(received(('DONE',)))
