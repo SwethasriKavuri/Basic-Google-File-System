@@ -19,6 +19,7 @@ class Master(process):
         self.chunkServerStore = {}          # Maps chunk location to physical server/storage
         self.lastChunkOfFileStore = {}      # Maps every file with last chunkid and length of last chunk
         self.deletedChunksList = {}
+        self.leaseQueue = {}                # Maps fileName with client requests
         self.numChunkServer = 5
         self.chunkSize = 10
         self.counter = 0
@@ -151,6 +152,27 @@ class Master(process):
                 localChunkList[chunkServer] = chunkuuids
         self.deletedChunksList = localChunkList
     
+
+    def receive(msg =('ADD_TO_LEASE_Q', fileName, c), from_= client):
+        output('Adding to lease Q from client ', client)
+        if fileName not in leaseQueue:
+            leaseQueue[fileName] = []
+        leaseQueue[fileName].append(client)
+        checkQueueAndReturn(fileName, client, c)
+
+    def checkQueueAndReturn(fileName, client, c):
+        if leaseQueue[fileName][0] == client:
+            output('Chance given to ', client)
+            send(('CLIENT_TURN_IN_LEASE_Q', fileName, c+1), to= client)
+        else:
+            output('Chance not given to ', client)
+            send(('CLIENT_TURN_IN_LEASE_Q', fileName, c), to= client)
+
+    def receive(msg =('RECORD_APPEND_NEXT_IN_LEASE_Q', fileName, c), from_= client):
+        leaseQueue[fileName].pop(0)
+        if len(leaseQueue[fileName]) != 0:
+            print(leaseQueue[fileName][0])
+            checkQueueAndReturn(fileName, leaseQueue[fileName][0], c)
         
     def run():
         heartBeat =  new(HeartBeat)

@@ -10,19 +10,42 @@ def main():
     client1 = new(GFSClient)
     setup(client1, (master1,))
     start(client1)
-    s1 = 'Hi testing 123'
+    client2 = new(GFSClient)
+    setup(client2, (master1,))
+    start(client2)
+    client3 = new(GFSClient)
+    setup(client3, (master1,))
+    start(client3)
+    client4 = new(GFSClient)
+    setup(client4, (master1,))
+    start(client4)
+    client5 = new(GFSClient)
+    setup(client5, (master1,))
+    start(client5)
+    s1 = 'Hi testing 12'
     s2 = 'Hi testing 456'
     fileName = 'abc.txt'
     send(('WRITE_MSG', 1, 'abc.txt', s1), to=client1)
     await(some(received(('WRITTEN', fileName2)), 
                                     has=fileName == fileName2))
+    
+    s2 = 'Append1'
+    send(('WRITE_APPEND_MSG', 1, 'abc.txt', s2), to=client1)
+    s2 = 'Append2'
+    send(('WRITE_APPEND_MSG', 1, 'abc.txt', s2), to=client2)
+    s2 = 'Append3'
+    send(('WRITE_APPEND_MSG', 1, 'abc.txt', s2), to=client3)
+    s2 = 'Appending 1111'
+    send(('WRITE_APPEND_MSG', 1, 'abc.txt', s2), to=client4)
+    s2 = 'Appending 555'
+    send(('WRITE_APPEND_MSG', 1, 'abc.txt', s2), to=client5)
+    
+    time.sleep(5)
     send(('READ_MSG', 1, 'abc.txt'), to=client1) 
     await(some(received(('READ_FILE_DONE',dataRead,fileName2)), 
                                     has=fileName == fileName2))
     output('THIS IS THE DATA READ!!!!!',dataRead)
-    s2 = 'Append 123'
-    send(('WRITE_APPEND_MSG', 1, 'abc.txt', s2), to=client1)
-    time.sleep(2)
-    send(('DELETE', 1, 'abc.txt'), to = client1)
-    await(received(('DONE',)))
+    #time.sleep(2)
+    #send(('DELETE', 1, 'abc.txt'), to = client1)
+    #await(received(('DONE',)))
     

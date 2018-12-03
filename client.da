@@ -67,20 +67,36 @@ class GFSClient(process):
             output('After send')
             await(some(received(('WRITE_CHUNK_DONE',success, chunkuuid3 , c3)), 
                                     has= c3 > c and chunkuuids[i] == chunkuuid3))   
-        send(('UPDATE_LAST_CHUNK_DATA', fileName, chunkuuids[-1], len(chunks[-1])), to= master)  
+        send(('UPDATE_LAST_CHUNK_DATA', fileName, chunkuuids[-1], len(chunks[-1])), to= master) 
+
         
     def receive(msg= ('WRITE_APPEND_MSG', threadId, fileName, dataToWrite)):
         if not self.exists(fileName):
             raise Exception("Append error, file does not exist: " + fileName)
+        c = logical_clock()
+        send(('ADD_TO_LEASE_Q', fileName, c), to= master)
+        await(some(received(('CLIENT_TURN_IN_LEASE_Q', fileName1, c3)), 
+                                has= c3 > c and fileName == fileName1))
         numChunks = self.getNumChunks(len(dataToWrite))
         toAppend = False
         if((numChunks == 1) and (len(dataToWrite) != self.chunkSize)):
+            output('In append if')
             c = logical_clock()
             send(('GET_LAST_CHUNK_DATA', fileName, c), to= master)
             await(some(received(('GET_LAST_CHUNK_DATA_DONE', fileName1, chunkuuid, currChunkLen, chunkLocList, chunkServerLocal, c3)), 
                                     has= c3 > c and fileName == fileName1))
+            output('After await', dataToWrite, self.chunkSize, currChunkLen)
             if(len(dataToWrite) <= (self.chunkSize - currChunkLen)):
                 addToExistingChunkFile(fileName1, chunkuuid, currChunkLen, chunkLocList, chunkServerLocal, dataToWrite)
+            else:
+                chunkuuids = []
+                c = logical_clock()
+                output('IN append else')
+                send(('ALLOC_APPEND_MASTER', threadId, fileName, numChunks, c), to= master)
+                await(some(received(('ALLOC_APPEND_DONE',  pid, fileName1, chunkuuids, c2, chunkServerStore, chunkStore)),
+                                     has= c2 > c and fileName == fileName1 ))
+                output('After await')
+                self.writeChunks(chunkuuids, dataToWrite, chunkServerStore, chunkStore, fileName)
         else:
             chunkuuids = []
             c = logical_clock()
@@ -90,6 +106,10 @@ class GFSClient(process):
                                  has= c2 > c and fileName == fileName1 ))
             output('After await')
             self.writeChunks(chunkuuids, dataToWrite, chunkServerStore, chunkStore, fileName)
+        output('DONE WITH RECORD_APPEND ', self)
+        c1 = logical_clock()
+        send(('RECORD_APPEND_NEXT_IN_LEASE_Q', fileName, c1), to= master) 
+
 
     def addToExistingChunkFile(fileName, chunkuuid, currChunkLen, chunkLocList, chunkServerLocal, dataToWrite):
         output('inside addToExistingChunkFile', chunkuuid)
@@ -101,7 +121,8 @@ class GFSClient(process):
         output('After send')
         await(some(received(('WRITE_CHUNK_DONE',success, chunkuuid3 , c3)), 
                                 has= c3 > c and chunkuuid == chunkuuid3))   
-        send(('UPDATE_LAST_CHUNK_DATA', fileName, chunkuuid, len(dataToWrite)+currChunkLen), to= master)  
+        send(('UPDATE_LAST_CHUNK_DATA', fileName, chunkuuid, len(dataToWrite)+currChunkLen), to= master)
+
         
 
     def receive(msg= ('READ_MSG', threadId, fileName)):
