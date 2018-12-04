@@ -90,6 +90,12 @@ class Master(process):
     def receive(msg = ('UPDATE_LAST_CHUNK_DATA', fileName, chunkuuid, chunklen), from_=client):
         self.lastChunkOfFileStore[fileName] = [chunkuuid, chunklen]
 
+    def receive(msg = ('LATEST_CHUNK_DATA', fileName, c), from_=client):
+        chunkuuid = lastChunkOfFileStore[fileName][0]
+        currChunkLen = lastChunkOfFileStore[fileName][1]
+        chunkuuids = fileStore[fileName]
+        send(('LATEST_CHUNK_DATA_DONE',chunkuuid,currChunkLen,chunkuuids,fileName,c+1), to=client)   
+
     def receive(msg = ('GET_LAST_CHUNK_DATA', fileName, c), from_=client):
         chunkuuid = lastChunkOfFileStore[fileName][0]
         currChunkLen = lastChunkOfFileStore[fileName][1]
@@ -128,6 +134,9 @@ class Master(process):
     def receive(msg =('FILE_EXISTS_MASTER', fileName, c), from_= client):
         self.res = exists(fileName)
         output(res, client)
+        # currChunkUuid = self.lastChunkOfFileStore[fileName][0]
+        # currChunkLen = self.lastChunkOfFileStore[fileName][1]
+        # chunkuuids = self.fileStore[fileName]
         send(('FILE_EXISTS_MASTER_DONE', self.res, fileName, c+1), to=client)
         output("RES sent : ", res)
         
