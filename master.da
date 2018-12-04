@@ -24,7 +24,7 @@ class Master(process):
         self.chunkSize = 10
         self.counter = 0
         self.res = False
-        self.numReplicas = 2
+        self.numReplicas = 3
         self.availableChunkServers = set()
         self.initChunks()
         
@@ -56,16 +56,18 @@ class Master(process):
             self.counter = (self.counter+1) % self.numChunkServer
         return chunkuuids
      
-    def receive(msg= ('ALLOC_MASTER', pid, fileName, numChunks, c),from_= client):
+    def receive(msg= ('ALLOC_MASTER', isCreate, fileName, numChunks, c),from_= client):
         output('Inside master to write', fileName)
-        chunkuuids = self.allocate(fileName, numChunks)
+        chunkuuids = self.allocate(fileName, numChunks, isCreate)
         output('In master chunks', chunkuuids)
-        send(('ALLOC_DONE', pid, fileName, chunkuuids, c+1, chunkServerStore,
+        send(('ALLOC_DONE', fileName, chunkuuids, c+1, chunkServerStore,
                  chunkStore ), to=client)
 
-    def allocate(fileName, numChunks):
+    def allocate(fileName, numChunks, isCreate):
         chunkuuids = self.allocateChunks(numChunks)
         output('Chunks allocated')
+        if not isCreate:
+            chunkuuids = self.fileStore[fileName]+ chunkuuids
         self.fileStore[fileName] = chunkuuids
         return chunkuuids
     

@@ -26,7 +26,6 @@ class GFSClient(process):
         send(('FILE_EXISTS_MASTER', fileName, c), to= master)                 # send and await message from master server
         await(some(received(('FILE_EXISTS_MASTER_DONE', res, fileName1, c2)),
                              has= c2 > c and fileName == fileName1))
-        output('Hi',res, fileName1)
         return res
 
     def receive(msg=('CREATE_MSG',threadId,fileName)):
@@ -37,8 +36,8 @@ class GFSClient(process):
         numChunks = 1
         chunkuuids = []
         c = logical_clock()
-        send(('ALLOC_MASTER', threadId, fileName, numChunks, c), to= master)           # send and await message from master server
-        await(some(received(('ALLOC_DONE', pid, fileName1, chunkuuids, c2, chunkServerStore, chunkStore)),
+        send(('ALLOC_MASTER', True, fileName, numChunks, c), to= master)           # send and await message from master server
+        await(some(received(('ALLOC_DONE', fileName1, chunkuuids, c2, chunkServerStore, chunkStore)),
                              has= c2 > c and fileName == fileName1 ))
         self.writeChunks(chunkuuids,'',chunkServerStore,chunkStore,fileName)
         send(('CREATED',fileName), to=nodeof(self))
@@ -53,11 +52,11 @@ class GFSClient(process):
                                     has= c3 > c and fileName == fileName1))
         if(currChunkLen == 0 and len(chunkuuids) == 1):        
             numChunks = self.getNumChunks(len(dataToWrite))-1
-            chunkuuids = [].append(currentChunkUuid)
+            chunkuuids = [currentChunkUuid]
             c = logical_clock()
             output('Num chunks', numChunks)
-            send(('ALLOC_MASTER', threadId, fileName, numChunks, c), to= master)           # send and await message from master server
-            await(some(received(('ALLOC_DONE',  pid, fileName1, chunkuuids, c2, chunkServerStore, chunkStore)),
+            send(('ALLOC_MASTER', False, fileName, numChunks, c), to= master)           # send and await message from master server
+            await(some(received(('ALLOC_DONE', fileName1, chunkuuids, c2, chunkServerStore, chunkStore)),
                                  has= c2 > c and fileName == fileName1 ))
             self.writeChunks(chunkuuids, dataToWrite, chunkServerStore, chunkStore, fileName)
         else:
