@@ -24,8 +24,11 @@ def main():
     start(client5)
     s1 = 'Hi testing 12'
     s2 = 'Hi testing 456'
-    fileName = 'abc.txt'
-    send(('WRITE_MSG', 1, 'abc.txt', s1), to=client1)
+    fileName = 'Hello.txt'
+    send(('CREATE_MSG', 1, fileName), to=client1)
+    await(some(received(('CREATED', fileName2)), 
+                                     has=fileName == fileName2))
+    send(('WRITE_MSG',1,fileName, s1), to=client1)
     await(some(received(('WRITTEN', fileName2)), 
                                     has=fileName == fileName2))
     
@@ -46,7 +49,7 @@ def main():
     await(some(received(('READ_FILE_DONE',dataRead,fileName2)), 
                                     has=fileName == fileName2))
     output('THIS IS THE DATA READ!!!!!',dataRead)
-    #time.sleep(2)
-    #send(('DELETE', 1, 'abc.txt'), to = client1)
-    #await(received(('DONE',)))
+    time.sleep(2)
+    send(('DELETE', 1, 'abc.txt'), to = client1)
+    await(received(('DONE',)))
     
