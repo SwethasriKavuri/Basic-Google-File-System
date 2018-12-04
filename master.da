@@ -158,8 +158,13 @@ class Master(process):
         localChunkList = {}
         for chunkServer,chunkuuids in self.deletedChunksList.items():
             if chunkServer in self.availableChunkServers:
-                chunkFilesToDelete  = list(set(fileList[chunkServer]) - set(chunkuuids))
-                send(('DELETED_CHUNKS', chunkFilesToDelete), to= chunkServer)
+                output('in Chunk files to delete')
+                chunkFilesToDelete =[]
+                for  chunkuuid in chunkuuids:
+                    if chunkuuid in fileList[chunkServer]:
+                        chunkFilesToDelete.append(chunkuuid)
+                if len(chunkFilesToDelete) != 0:
+                    send(('DELETED_CHUNKS', chunkFilesToDelete), to= chunkServer)
             else:
                 localChunkList[chunkServer] = chunkuuids
         self.deletedChunksList = localChunkList

@@ -32,7 +32,7 @@ def main():
     await(some(received(('WRITTEN', fileName2)), 
                                     has=fileName == fileName2))
     
-    s2 = 'Append1'
+    '''s2 = 'Append1'
     send(('WRITE_APPEND_MSG', 1, 'abc.txt', s2), to=client1)
     s2 = 'Append2'
     send(('WRITE_APPEND_MSG', 1, 'abc.txt', s2), to=client2)
@@ -45,12 +45,12 @@ def main():
     send(('CREATE_SNAPSHOT', 1, 'abc.txt'), to = client1)
     s2 = 'Appending 555'
     #send(('WRITE_APPEND_MSG', 1, 'abc.txt', s2), to=client5)
-    time.sleep(5)
+    time.sleep(5)'''
     send(('READ_MSG', 1, 'abc.txt'), to=client1) 
     await(some(received(('READ_FILE_DONE',dataRead,fileName2)), 
                                     has=fileName == fileName2))
     output('THIS IS THE DATA READ!!!!!',dataRead)
-    time.sleep(2)
-    #send(('DELETE', 1, 'abc.txt'), to = client1)
+    
+    send(('DELETE', 1, 'abc.txt'), to = client1)
     await(received(('DONE',)))
     

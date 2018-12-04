@@ -84,7 +84,7 @@ class GFSChunkserver(process):
         send(('HEARTBEAT_ACKNOWLEDGED',files), to=heartBeat)
     
     def receive(msg =('DELETED_CHUNKS', chunkuuids), from_= master):
-        
+        output('To delete',chunkuuids)
         for file in chunkuuids:
             localFileName = chunkFileName(file)
             if os.path.exists(localFileName):
