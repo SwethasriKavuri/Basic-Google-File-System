@@ -26,32 +26,52 @@ class GFSClient(process):
         send(('FILE_EXISTS_MASTER', fileName, c), to= master)                 # send and await message from master server
         await(some(received(('FILE_EXISTS_MASTER_DONE', res, fileName1, c2)),
                              has= c2 > c and fileName == fileName1))
-        #await(self.temp != None)
         output('Hi',res, fileName1)
         return res
 
-    #def receive(msg=('FILE_EXISTS_MASTER_DONE',res), from_=m):
-    #    output("received response from master")
-    #    self.temp = res
+    def receive(msg=('CREATE_MSG',threadId,fileName)):
+        if(exists(fileName)):        
+            output("File exists already",fileName)
+            raise Exception("File error, file exists already: " + fileName)  
+        output('Create File',fileName)
+        numChunks = 1
+        chunkuuids = []
+        c = logical_clock()
+        send(('ALLOC_MASTER', threadId, fileName, numChunks, c), to= master)           # send and await message from master server
+        await(some(received(('ALLOC_DONE', pid, fileName1, chunkuuids, c2, chunkServerStore, chunkStore)),
+                             has= c2 > c and fileName == fileName1 ))
+        self.writeChunks(chunkuuids,'',chunkServerStore,chunkStore,fileName)
+        send(('CREATED',fileName), to=nodeof(self))
 
     def receive(msg= ('WRITE_MSG', threadId, fileName, dataToWrite)):
         output('Write file', fileName)
-        if(exists(fileName)):
-            #send(('DELETE', threadId, fileName))
-            await(received(('FILE_DELETED_DONE',)))
-        numChunks = self.getNumChunks(len(dataToWrite))
-        chunkuuids = []
         c = logical_clock()
-        output('Num chunks', numChunks)
-        send(('ALLOC_MASTER', threadId, fileName, numChunks, c), to= master)           # send and await message from master server
-        await(some(received(('ALLOC_DONE',  pid, fileName1, chunkuuids, c2, chunkServerStore, chunkStore)),
-                             has= c2 > c and fileName == fileName1 ))
-        self.writeChunks(chunkuuids, dataToWrite, chunkServerStore, chunkStore, fileName)
+        if not self.exists(fileName):
+            raise Exception("File error, file does not exist: " + fileName)
+        send(('LATEST_CHUNK_DATA', fileName, c), to= master) 
+        await(some(received(('LATEST_CHUNK_DATA_DONE',currentChunkUuid,currChunkLen,chunkuuids,fileName1,c3)), 
+                                    has= c3 > c and fileName == fileName1))
+        if(currChunkLen == 0 and len(chunkuuids) == 1):        
+            numChunks = self.getNumChunks(len(dataToWrite))-1
+            chunkuuids = [].append(currentChunkUuid)
+            c = logical_clock()
+            output('Num chunks', numChunks)
+            send(('ALLOC_MASTER', threadId, fileName, numChunks, c), to= master)           # send and await message from master server
+            await(some(received(('ALLOC_DONE',  pid, fileName1, chunkuuids, c2, chunkServerStore, chunkStore)),
+                                 has= c2 > c and fileName == fileName1 ))
+            self.writeChunks(chunkuuids, dataToWrite, chunkServerStore, chunkStore, fileName)
+        else:
+            raise Exception("File is already writen, use record append: " + fileName)
+
         send(('WRITTEN',fileName), to=nodeof(self))
 
     def writeChunks(chunkuuids, dataToWrite, chunkServerStore, chunkStore, fileName):
         output('inside write chunks', chunkStore)
         chunks = [ dataToWrite[x: x+self.chunkSize] for x in range(0, len(dataToWrite), self.chunkSize) ]
+        if len(chunks) ==0:
+            output(0)
+            chunks= [""]
+        output(len(chunks[0]))
         for i in range(0, len(chunkuuids)):
             chunkloc = chunkStore[chunkuuids[i]]
             output(chunkloc, chunkServerStore[chunkloc[0]])
@@ -60,6 +80,7 @@ class GFSClient(process):
             chunkLocLength = len(chunkloc)
             for j in range(1, chunkLocLength):
                 chunkServerLocal.append(chunkServerStore[chunkloc[j]])
+            output('till here')
             send(('STORE_DATA', chunkloc[1:], chunkuuids[i], chunks[i],chunkServerLocal, c), to= chunkServerStore[chunkloc[0]])
             await(some(received(('STORE_DATA_DONE', c2, chunkuuid2)),
                              has= c2 > c and chunkuuids[i] == chunkuuid2 ))
