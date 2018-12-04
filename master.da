@@ -26,6 +26,7 @@ class Master(process):
         self.res = False
         self.numReplicas = 3
         self.availableChunkServers = set()
+        self.tempStore = {}
         self.initChunks()
         
     
@@ -57,7 +58,7 @@ class Master(process):
         return chunkuuids
      
     def receive(msg= ('ALLOC_MASTER', isCreate, fileName, numChunks, c),from_= client):
-        output('Inside master to write', fileName)
+        output('Inside master to allocate', fileName)
         chunkuuids = self.allocate(fileName, numChunks, isCreate)
         output('In master chunks', chunkuuids)
         send(('ALLOC_DONE', fileName, chunkuuids, c+1, chunkServerStore,
@@ -65,6 +66,7 @@ class Master(process):
 
     def allocate(fileName, numChunks, isCreate):
         chunkuuids = self.allocateChunks(numChunks)
+        self.tempStore[fileName] = chunkuuids
         output('Chunks allocated')
         if not isCreate:
             chunkuuids = self.fileStore[fileName]+ chunkuuids
@@ -79,7 +81,7 @@ class Master(process):
 
     def receive(msg = ('READ_MASTER', pid, fileName,c), from_=client):
         send(('READ_MASTER_DONE', pid, fileName, c+1, 
-        self.chunkServerStore, self.fileStore, self.chunkStore), to=client)          
+        self.chunkServerStore, self.fileStore[fileName], self.chunkStore), to=client)          
 
     
     def allocate_append(fileName, numChunks):
@@ -115,16 +117,11 @@ class Master(process):
         if fileDeleted:
             send(('DELETE_FILE_MASTER_DONE', pid, fileName, c+1), to=client)
         elif timeout(6):
-            pass   
+            raise Exception("Error while deleting file "+fileName)  
     
     def delete(fileName):
         try:
-            for chunkuuid in fileStore[fileName]:
-                for chunkLoc in self.chunkStore[chunkuuid]:
-                    if self.chunkServerStore[chunkLoc] not in self.deletedChunksList:
-                        self.deletedChunksList[self.chunkServerStore[chunkLoc]] = []
-                    self.deletedChunksList[self.chunkServerStore[chunkLoc]].append(chunkuuid)
-                    
+            addToGarbageList(fileStore[fileName])        
             del fileStore[fileName]
             output(fileStore)
             output(self.deletedChunksList)
@@ -174,23 +171,24 @@ class Master(process):
         output('Adding to lease Q from client ', client)
         if fileName not in leaseQueue:
             leaseQueue[fileName] = []
-        leaseQueue[fileName].append((client,operation))
+        leaseQueue[fileName].append((client,operation,c))
         checkQueueAndReturn(fileName, client, c, operation)
 
     def checkQueueAndReturn(fileName, client, c, operation):
         if leaseQueue[fileName][0][0] == client and leaseQueue[fileName][0][1] == operation:
-            output('Chance given to ', client)
+            output('Chance given to ', client, operation)
             msg  ='CLIENT_TURN_IN_LEASE_Q_'+operation 
             send((msg, fileName, c+1), to= client)
         else:
             output('Chance not given to ', client)
             #send(('CLIENT_TURN_IN_LEASE_Q', fileName, c), to= client)
 
-    def receive(msg =('PROCESS_NEXT_IN_LEASE_Q', fileName, c), from_= client):
+    def receive(msg =('PROCESS_NEXT_IN_LEASE_Q', fileName), from_= client):
         leaseQueue[fileName].pop(0)
         if len(leaseQueue[fileName]) != 0:
-            print(leaseQueue[fileName][0])
-            checkQueueAndReturn(fileName, leaseQueue[fileName][0][0], c, leaseQueue[fileName][0][1])
+            output("Lease for",leaseQueue[fileName][0])
+            output("Lease Queue", leaseQueue[fileName])
+            checkQueueAndReturn(fileName, leaseQueue[fileName][0][0], leaseQueue[fileName][0][2], leaseQueue[fileName][0][1])
     
     def receive(msg=('UPDATE_SNAPSHOT', fileName, c), from_=client):
         chunkuuids = self.fileStore[fileName]
@@ -204,7 +202,37 @@ class Master(process):
         self.lastChunkOfFileStore[fileName][0] = lastChunkData
         self.fileStore[fileName] = new_chunkuuids
         send(('UPDATE_SNAPSHOT_DONE', fileName, c+1), to = client)
-         
+    
+    def addToGarbageList(chunkuuids):
+        for chunkuuid in chunkuuids:
+                for chunkLoc in self.chunkStore[chunkuuid]:
+                    if self.chunkServerStore[chunkLoc] not in self.deletedChunksList:
+                        self.deletedChunksList[self.chunkServerStore[chunkLoc]] = []
+                    self.deletedChunksList[self.chunkServerStore[chunkLoc]].append(chunkuuid)
+    
+    def receive(msg=('ERROR_CREATE',fileName), from_=client):
+        if fileName in self.fileStore:
+            addToGarbageList(fileStore[fileName])        
+            del self.fileStore[fileName]
+            if fileName in self.tempStore:           
+                del self.tempStore[fileName] 
+    
+    def receive(msg=('ERROR_WRITE',fileName), from_=client):
+        if fileName in self.fileStore:
+            addToGarbageList(fileStore[fileName])
+            del self.fileStore[fileName]
+            if fileName in self.tempStore[fileName]:           
+                del self.tempStore[fileName] 
+        output(self.fileStore)
+        output(self.tempStore)
+    
+    def receive(msg=('ERROR_WRITE_APPEND',fileName), from_=client):
+        if fileName in self.tempStore:
+            addToGarbageList(self.tempStore[fileName])
+            for chunkuuid in self.tempStore[fileName]:
+                if chunkuuid in self.fileStore[fileName]:
+                    self.fileStore[fileName].remove(chunkuuid)           
+            del self.tempStore[fileName] 
             
     def run():
         heartBeat =  new(HeartBeat)
