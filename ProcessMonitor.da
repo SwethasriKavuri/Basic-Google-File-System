@@ -1,0 +1,71 @@
+import sys, time
+from collections import deque
+config(channel is fifo, clock is lamport)
+
+class ProcessMonitor(process):
+
+    def setup():
+        self.createQ = []
+        self.writeQ = []
+        self.recordAppendQ = []
+        self.readQ = []
+        self.deleteQ = []
+        self.createSnapshotQ = []
+
+    def receive(msg= ('START_PROCESS', processOperation), from_= callingProcess):        
+        if processOperation == 'Create':
+            createQ.append(('START', processOperation, callingProcess, time.time()))
+        elif processOperation == 'Write':
+            writeQ.append(('START', processOperation, callingProcess, time.time()))
+        elif processOperation == 'RecordAppend':
+            recordAppendQ.append(('START', processOperation, callingProcess, time.time()))
+        elif processOperation == 'Read':
+            readQ.append(('START', processOperation, callingProcess, time.time()))
+        elif processOperation == 'Delete':
+            deleteQ.append(('START', processOperation, callingProcess, time.time()))
+        elif processOperation == 'CreateSnapshot':
+            createSnapshotQ.append(('START', processOperation, callingProcess, time.time()))
+
+
+    def receive(msg= ('FINISH_PROCESS', processOperation), from_= callingProcess):
+        if processOperation == 'Create':
+            createQ.append(('FINISH', processOperation, callingProcess, time.time()))
+        elif processOperation == 'Write':
+            writeQ.append(('FINISH', processOperation, callingProcess, time.time()))
+        elif processOperation == 'RecordAppend':
+            recordAppendQ.append(('FINISH', processOperation, callingProcess, time.time()))
+        elif processOperation == 'Read':
+            readQ.append(('FINISH', processOperation, callingProcess, time.time()))
+        elif processOperation == 'Delete':
+            deleteQ.append(('FINISH', processOperation, callingProcess, time.time()))
+        elif processOperation == 'CreateSnapshot':
+            createSnapshotQ.append(('FINISH', processOperation, callingProcess, time.time()))
+
+
+    def receive(msg= ('FINISH_PROCESS_FAIL', processOperation), from_= callingProcess):
+        if processOperation == 'Create':
+            createQ.append(('FAILED', processOperation, callingProcess, time.time()))
+        elif processOperation == 'Write':
+            writeQ.append(('FAILED', processOperation, callingProcess, time.time()))
+        elif processOperation == 'RecordAppend':
+            recordAppendQ.append(('FAILED', processOperation, callingProcess, time.time()))
+        elif processOperation == 'Read':
+            readQ.append(('FAILED', processOperation, callingProcess, time.time()))
+        elif processOperation == 'Delete':
+            deleteQ.append(('FAILED', processOperation, callingProcess, time.time()))
+        elif processOperation == 'CreateSnapshot':
+            createSnapshotQ.append(('FAILED', processOperation, callingProcess, time.time()))
+
+
+    def receive(msg= ('PRINT_MONITOR', )):
+        output('########################################## LOGS ##########################################')
+        output('Create Q: ', createQ)
+        output('Write Q: ', writeQ)
+        output('RecordAppend Q: ', recordAppendQ)
+        output('Read Q: ', readQ)
+        output('Delete Q: ', deleteQ)
+        output('Snapshot Q: ', createSnapshotQ)
+        output('######################################## LOGS END ########################################')
+
+    def run():
+        await(received(('DONE',)))

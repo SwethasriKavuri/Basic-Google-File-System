@@ -2,15 +2,17 @@ import sys, time
 from  master import Master
 from random import randint
 from math import ceil
+from ProcessMonitor import ProcessMonitor
 config(channel is fifo, clock is lamport)
 from functools import reduce
 
 
 class GFSClient(process):
     
-    def setup(master:Master):
+    def setup(master:Master, pmon:ProcessMonitor):
         output('Setting up client', master)
         self.master = master
+        self.pmon = pmon
         self.temp = None
         self.chunkSize =10
         
@@ -30,6 +32,7 @@ class GFSClient(process):
 
     def receive(msg=('CREATE_MSG',threadId,fileName)):
         try:
+            send(('START_PROCESS', 'Create'), to= pmon)
             if(exists(fileName)):        
                 raise Exception("FAIL1")  
             output('Create File',fileName)
@@ -40,8 +43,10 @@ class GFSClient(process):
             await(some(received(('ALLOC_DONE', fileName1, chunkuuids, c2, chunkServerStore, chunkStore)),
                                  has= c2 > c and fileName == fileName1 ))
             self.writeChunks(chunkuuids,'',chunkServerStore,chunkStore,fileName)
+            send(('FINISH_PROCESS', 'Create'), to= pmon)
             send(('CREATED',fileName), to=nodeof(self))
         except Exception as e:
+            send(('FINISH_PROCESS_FAIL', 'Create'), to= pmon)
             if str(e) == "FAIL1":
                 output("File error, file exists already: " + fileName)
             else:
@@ -51,6 +56,7 @@ class GFSClient(process):
 
     def receive(msg= ('WRITE_MSG', threadId, fileName, dataToWrite)):
         try:
+            send(('START_PROCESS', 'Write'), to= pmon)
             c = logical_clock()
             if not self.exists(fileName):
                 raise Exception("FAIL1")
@@ -80,9 +86,10 @@ class GFSClient(process):
                     raise Exception("Error while writing file:"+ fileName)
             else:
                 raise Exception("FAIL2")
-    
+            send(('FINISH_PROCESS', 'Write'), to= pmon)
             send(('WRITTEN',fileName), to=nodeof(self))
         except Exception as e:
+            send(('FINISH_PROCESS_FAIL', 'Write'), to= pmon)
             if str(e) == "FAIL1":
                 output("File error, file exists already: " + fileName)
             elif str(2)== "FAIL2":
@@ -129,6 +136,7 @@ class GFSClient(process):
         
     def receive(msg= ('WRITE_APPEND_MSG', threadId, fileName, dataToWrite)):
         try:
+            send(('START_PROCESS', 'RecordAppend'), to= pmon)
             if not self.exists(fileName):
                 raise Exception("FAIL1")
             c = logical_clock()
@@ -170,9 +178,10 @@ class GFSClient(process):
                 
                 self.writeChunks(chunkuuids, dataToWrite, chunkServerStore, chunkStore, fileName)
             output('DONE WITH RECORD_APPEND ', self)
-            
+            send(('FINISH_PROCESS', 'RecordAppend'), to= pmon)
             
         except Exception as e:
+            send(('FINISH_PROCESS_FAIL', 'RecordAppend'), to= pmon)
             if str(e) == "FAIL1":
                 output("File error, file exists already: " + fileName)
             else:
@@ -199,6 +208,7 @@ class GFSClient(process):
 
     def receive(msg= ('READ_MSG', threadId, fileName)):
         try:
+            send(('START_PROCESS', 'Read'), to= pmon)
             if not self.exists(fileName):
                 raise Exception("FAIL1")
             chunks = []
@@ -219,8 +229,10 @@ class GFSClient(process):
                     raise Exception()
                 chunks.append(chunk)
             dataRead = reduce(lambda x, y: x+y, chunks)
+            send(('FINISH_PROCESS', 'Read'), to= pmon)
             send(('READ_FILE_DONE',dataRead,fileName), to=nodeof(self))
         except Exception as e:
+            send(('FINISH_PROCESS_FAIL', 'Read'), to= pmon)
             if str(e) == "FAIL1":
                 output("File error, file does not exists: " + fileName)
             else:
@@ -229,6 +241,7 @@ class GFSClient(process):
 
     def receive(msg= ('DELETE', threadId, fileName)):
         try:
+            send(('START_PROCESS', 'Delete'), to= pmon)
             if not self.exists(fileName):
                 raise Exception("FAIL1")
             c = logical_clock()
@@ -238,7 +251,9 @@ class GFSClient(process):
                 output('File ', fileName, ' deleted successfully')
             elif timeout(5):
                 raise Exception("FAIL2")
+            send(('FINISH_PROCESS', 'Delete'), to= pmon)
         except Exception as e:
+            send(('FINISH_PROCESS_FAIL', 'Delete'), to= pmon)
             if str(e) == "FAIL1":
                 output("File error, file does not exists: " + fileName)
             else:
@@ -248,6 +263,7 @@ class GFSClient(process):
 
     def receive(msg= ('CREATE_SNAPSHOT', threadId, fileName)):
         try:
+            send(('START_PROCESS', 'CreateSnapshot'), to= pmon)
             if not self.exists(fileName):
                 raise Exception("FAIL1")
             c = logical_clock()
@@ -283,9 +299,10 @@ class GFSClient(process):
                 pass
             elif timeout(2):
                 raise Exception("SNAPSHOT creation failed for file:", fileName)
-            
+            send(('FINISH_PROCESS', 'CreateSnapshot'), to= pmon)
                
         except Exception as e:
+            send(('FINISH_PROCESS_FAIL', 'CreateSnapshot'), to= pmon)
             if str(e) == "FAIL1":
                 output("File error, file does not exists: " + fileName)
             else:

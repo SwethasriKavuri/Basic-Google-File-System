@@ -1,32 +1,40 @@
 import sys, time
 from master import Master
 from client import GFSClient
+from ProcessMonitor import ProcessMonitor
 config(channel is fifo, clock is lamport)
 
 def main():
+
+    processMon = new(ProcessMonitor)
+    setup(processMon, ())
+    start(processMon)
+    output('PMON started')
+
     master1 = new(Master)
     setup(master1, ())
     start(master1)
     client1 = new(GFSClient)
-    setup(client1, (master1,))
+    setup(client1, (master1,processMon))
     start(client1)
     client2 = new(GFSClient)
-    setup(client2, (master1,))
+    setup(client2, (master1,processMon))
     start(client2)
     client3 = new(GFSClient)
-    setup(client3, (master1,))
+    setup(client3, (master1,processMon))
     start(client3)
     client4 = new(GFSClient)
-    setup(client4, (master1,))
+    setup(client4, (master1,processMon))
     start(client4)
     client5 = new(GFSClient)
-    setup(client5, (master1,))
+    setup(client5, (master1,processMon))
     start(client5)
     s1 = 'Hi testing 12'
     s2 = 'Hi testing 456'
     fileName = 'abc.txt'
     send(('CREATE_MSG', 1, fileName), to=client1)
     await(some(received(('CREATED', fileName2)), has=fileName == fileName2))
+    
     send(('WRITE_MSG',1,fileName, s1), to=client1)
     await(some(received(('WRITTEN', fileName2)),has=fileName == fileName2))
     
@@ -42,7 +50,7 @@ def main():
     time.sleep(2)
     send(('CREATE_SNAPSHOT', 1, 'abc.txt'), to = client1)
     s2 = 'Appending 555'
-    #send(('WRITE_APPEND_MSG', 1, 'abc.txt', s2), to=client5)'''
+    #send(('WRITE_APPEND_MSG', 1, 'abc.txt', s2), to=client5)
     
     send(('CREATE_SNAPSHOT', 1, 'abc.txt'), to = client2)
     time.sleep(15)
@@ -50,6 +58,10 @@ def main():
     await(some(received(('READ_FILE_DONE',dataRead,fileName2)), 
                                     has=fileName == fileName2))
     output('THIS IS THE DATA READ!!!!!',dataRead)
-    send(('DELETE', 1, 'abc.txt'), to = client1)
+    send(('DELETE', 1, 'abc.txt'), to = client1)'''
+
+    time.sleep(3)
+    send(('PRINT_MONITOR', ), to=processMon)
+
     await(received(('DONE',)))
     
