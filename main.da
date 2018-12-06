@@ -43,7 +43,6 @@ def main():
     send(('WRITE_APPEND_MSG', 1, 'abc.txt', s2), to=client1)
     s2 = 'Append2'
     send(('WRITE_APPEND_MSG', 1, 'abc.txt', s2), to=client2)
-    
     '''
     s2 = 'Append3'
     send(('WRITE_APPEND_MSG', 1, 'abc.txt', s2), to=client3)
@@ -55,18 +54,27 @@ def main():
     #send(('WRITE_APPEND_MSG', 1, 'abc.txt', s2), to=client5)
     '''
     
-    send(('CREATE_SNAPSHOT', 1, 'abc.txt'), to = client2)
-    time.sleep(15)
+    send(('CREATE_SNAPSHOT', 1, 'abc.txt'), to = client3)
+    time.sleep(2)
     
     send(('READ_MSG', 1, 'abc.txt'), to=client1) 
     await(some(received(('READ_FILE_DONE',dataRead,fileName2)), 
                                     has=fileName == fileName2))
     output('THIS IS THE DATA READ!!!!!',dataRead)
     
-    send(('DELETE', 1, 'abc.txt'), to = client1)
-
+    #send(('DELETE', 1, 'abc.txt'), to = client1)
+    c=logical_clock()
+    send(('KILL_CHUNKSERVER',c), to=client2)
+    await(some(received(('KILL',chunkServer,c2)), 
+                                    has=c2>c))
+    output(chunkServer)
+    send(('DONE',), to =chunkServer)
     time.sleep(3)
-    send(('PRINT_MONITOR', ), to=processMon)
+    #send(('PRINT_MONITOR', ), to=processMon)
+    await(some(received(('READ_FILE_DONE',dataRead,fileName2)), 
+                                    has=fileName == fileName2))
+    
+    output('THIS IS THE DATA READ!!!!!',dataRead)    
 
     await(received(('DONE',)))
     

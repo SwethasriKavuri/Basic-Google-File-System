@@ -80,7 +80,12 @@ class GFSChunkserver(process):
         return localFilename
 
     def receive(msg =('HEARTBEAT',), from_= heartBeat):
+        # Randomly select at max 5 files and send them to master to check if
+        # they exist or they should be deleted
+        
         files  = os.listdir(self.localFilesystemRoot)
+        if len(files)>5:
+            files  =files[0:5]
         send(('HEARTBEAT_ACKNOWLEDGED',files), to=heartBeat)
     
     def receive(msg =('DELETED_CHUNKS', chunkuuids), from_= master):
@@ -98,3 +103,4 @@ class GFSChunkserver(process):
         
     def run():
          await(received(('DONE',)))
+         output('CHUNK SERVER KILLED')
