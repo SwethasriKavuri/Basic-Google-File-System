@@ -62,7 +62,6 @@ def main():
                                     has=fileName == fileName2))
     output('THIS IS THE DATA READ!!!!!',dataRead)
     
-    
     c=logical_clock()
     send(('KILL_CHUNKSERVER',c), to=client2)
     await(some(received(('KILL',chunkServer,c2)), 
@@ -73,8 +72,7 @@ def main():
     #send(('PRINT_MONITOR', ), to=processMon)
     await(some(received(('READ_FILE_DONE',dataRead,fileName2)), 
                                     has=fileName == fileName2))
-    
-    output('THIS IS THE DATA READ!!!!!',dataRead)    
+        output('THIS IS THE DATA READ!!!!!',dataRead)    
     send(('DELETE', 1, 'abc.txt'), to = client1)
     await(received(('DONE',)))
     
