@@ -14,30 +14,24 @@ class HeartBeat(process):
         self.availableChunkServers = set()
         self.filesList = {}
         self.master = master
+
         
     def sendHeartBeat():
         output('Inside Send Heart Beat')
-        """send(('START_HEARTBEAT',), to = nodeof(self))
-        
-    def receive(msg =('START_HEARTBEAT',), from_=a):
-        output('Inside Heart Beat')"""
         self.heartBeatFromChunks = set()
-        self.availableChunkServers = set()
-        
-        send(('GET_AVAILABLE_CHUNK_SERVERS',), to = master)
-        await(len(self.availableChunkServers)!=0)
-        output(self.availableChunkServers)
+        nonAvailableChunkServers =set()
+        if len(self.availableChunkServers)==0:
+            send(('GET_AVAILABLE_CHUNK_SERVERS',), to = master)
+            await(len(self.availableChunkServers)!=0)        
         for chunkServer in self.availableChunkServers:
             send(('HEARTBEAT',), to = chunkServer)
         if await(len(self.availableChunkServers) == len(self.heartBeatFromChunks)):
             output('All chunk servers are responding')
         elif timeout(20):
             output('Inside else if', self.heartBeatFromChunks)
-            for chunkServer in self.availableChunkServers:
-                if chunkServer not in self.heartBeatFromChunks:
-                    output(chunkServer, ": Chunk Server is down")
-            self.availableChunkServers = self.heartBeatFromChunks
-        send(('UPDATE_AVAILABLE_CHUNK_SERVERS', self.availableChunkServers), to = master)
+            nonAvailableChunkServers = self.availableChunkServers - self.heartBeatFromChunks
+            output("Chunk servers not available", nonAvailableChunkServers)
+        send(('UPDATE_AVAILABLE_CHUNK_SERVERS', nonAvailableChunkServers), to = master)
         send(('DELETE_ORPHANED_CHUNKS', self.filesList), to=master)
      
     def receive(msg=('AVAILABLE_CHUNK_SERVERS', availableChunkServers), from_=master):

@@ -27,6 +27,7 @@ class Master(process):
         self.res = False
         self.numReplicas = 3
         self.availableChunkServers = set()
+        self.nonAvailableChunkServers =set()
         self.tempStore = {}
         self.initChunks()
         
@@ -52,7 +53,7 @@ class Master(process):
             while len(chunkLocations)<numReplicas:
                 counterTemp = (self.counter+j+1) % self.numChunkServer
                 j+=1
-                if self.chunkServerStore[counterTemp] in self.availableChunkServers:
+                if self.chunkServerStore[counterTemp] not in self.nonAvailableChunkServers:
                     chunkLocations.append(counterTemp)
             self.chunkStore[chunkuuid] = chunkLocations
             self.counter = (self.counter+1) % self.numChunkServer
@@ -149,13 +150,13 @@ class Master(process):
     def receive(msg = ('GET_AVAILABLE_CHUNK_SERVERS', ), from_=heartBeat):
         send(('AVAILABLE_CHUNK_SERVERS',self.availableChunkServers), to = heartBeat)
     
-    def receive(msg = ('UPDATE_AVAILABLE_CHUNK_SERVERS', availableChunkServers), from_= heartBeat):
-        self.availableChunkServers = availableChunkServers
+    def receive(msg = ('UPDATE_AVAILABLE_CHUNK_SERVERS', nonAvailableChunkServers), from_= heartBeat):
+        self.nonAvailableChunkServers = nonAvailableChunkServers
     
     def receive(msg = ('DELETE_ORPHANED_CHUNKS', fileList), from_=heartBeat):
         localChunkList = {}
         for chunkServer,chunkuuids in self.deletedChunksList.items():
-            if chunkServer in self.availableChunkServers:
+            if chunkServer not in self.nonAvailableChunkServers:
                 output('in Chunk files to delete')
                 chunkFilesToDelete =[]
                 for  chunkuuid in chunkuuids:
