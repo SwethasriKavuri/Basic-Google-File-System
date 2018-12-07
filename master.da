@@ -26,6 +26,7 @@ class Master(process):
         self.counter = 0
         self.res = False
         self.numReplicas = 3
+        self.snapShotuuids ={}
         self.availableChunkServers = set()
         self.nonAvailableChunkServers =set()
         self.tempStore = {}
@@ -124,7 +125,12 @@ class Master(process):
     def delete(fileName):
         try:
             addToGarbageList(fileStore[fileName])        
+            if fileName in self.snapShotuuids:
+                output(self.snapShotuuids[fileName])
+                addToGarbageList(self.snapShotuuids[fileName])
+                del self.snapShotuuids[fileName]
             del fileStore[fileName]
+            
             output(fileStore)
             output(self.deletedChunksList)
             return True
@@ -200,19 +206,24 @@ class Master(process):
     
     def receive(msg=('UPDATE_SNAPSHOT', fileName, c), from_=client):
         chunkuuids = self.fileStore[fileName]
+        if fileName not in self.snapShotuuids:
+            self.snapShotuuids[fileName] = []
+        self.snapShotuuids[fileName].extend(chunkuuids)
         new_chunkuuids = [chunkuuid+'-SNAPSHOT' for chunkuuid in chunkuuids]
         for chunkuuid in chunkuuids:
             chunkLoc = self.chunkStore[chunkuuid]
-            del self.chunkStore[chunkuuid]
+            #del self.chunkStore[chunkuuid]
             self.chunkStore[chunkuuid+'-SNAPSHOT'] = chunkLoc
         lastChunkData = lastChunkOfFileStore[fileName]
-        lastChunkData[0] = lastChunkData[0]+'-SNAPSHOT'
-        self.lastChunkOfFileStore[fileName][0] = lastChunkData
+        lastChunkuuid = lastChunkData[0]+'-SNAPSHOT'
+        updatedLastChunk = [lastChunkuuid, lastChunkData[1]] 
+        self.lastChunkOfFileStore[fileName] = updatedLastChunk
         self.fileStore[fileName] = new_chunkuuids
         send(('UPDATE_SNAPSHOT_DONE', fileName, c+1), to = client)
     
     def addToGarbageList(chunkuuids):
         for chunkuuid in chunkuuids:
+                output(self.chunkStore[chunkuuid])
                 for chunkLoc in self.chunkStore[chunkuuid]:
                     if self.chunkServerStore[chunkLoc] not in self.deletedChunksList:
                         self.deletedChunksList[self.chunkServerStore[chunkLoc]] = []
