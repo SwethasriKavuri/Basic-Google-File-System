@@ -33,33 +33,33 @@ def main():
     s2 = 'Hi testing 456'
     fileName = 'abc.txt'
     
-    send(('CREATE_MSG', 1, fileName), to=client1)
+    send(('CREATE_MSG', fileName), to=client1)
     await(some(received(('CREATED', fileName2)), has=fileName == fileName2))
     
-    send(('WRITE_MSG',1,fileName, s1), to=client1)
+    send(('WRITE_MSG', fileName, s1), to=client1)
     await(some(received(('WRITTEN', fileName2)),has=fileName == fileName2))
     
     s2 = 'Append1232'
-    send(('WRITE_APPEND_MSG', 1, 'abc.txt', s2), to=client1)
+    send(('WRITE_APPEND_MSG', 'abc.txt', s2), to=client1)
     s2 = 'Append2'
-    send(('WRITE_APPEND_MSG', 1, 'abc.txt', s2), to=client2)
+    send(('WRITE_APPEND_MSG', 'abc.txt', s2), to=client2)
     '''
     s2 = 'Append3'
-    send(('WRITE_APPEND_MSG', 1, 'abc.txt', s2), to=client3)
+    send(('WRITE_APPEND_MSG', 'abc.txt', s2), to=client3)
     s2 = 'Appending 1111'
-    send(('WRITE_APPEND_MSG', 1, 'abc.txt', s2), to=client4)
+    send(('WRITE_APPEND_MSG', 'abc.txt', s2), to=client4)
     time.sleep(2)
-    send(('CREATE_SNAPSHOT', 1, 'abc.txt'), to = client1)
+    send(('CREATE_SNAPSHOT', 'abc.txt'), to = client1)
     s2 = 'Appending 555'
-    #send(('WRITE_APPEND_MSG', 1, 'abc.txt', s2), to=client5)
+    #send(('WRITE_APPEND_MSG', 'abc.txt', s2), to=client5)
     '''
     
-    send(('CREATE_SNAPSHOT', 1, 'abc.txt'), to = client3)
+    send(('CREATE_SNAPSHOT', 'abc.txt'), to = client3)
     time.sleep(2)
-    
-    send(('READ_MSG', 1, 'abc.txt'), to=client1) 
-    await(some(received(('READ_FILE_DONE',dataRead,fileName2)), 
-                                    has=fileName == fileName2))
+    c =logical_clock()
+    send(('READ_MSG',c, 'abc.txt'), to=client1) 
+    await(some(received(('READ_FILE_DONE',dataRead,fileName2, c2)), 
+                                    has=fileName == fileName2 and c2>c))
     output('THIS IS THE DATA READ!!!!!',dataRead)
     
     '''
@@ -71,16 +71,9 @@ def main():
     output(chunkServer)
     send(('DONE',), to =chunkServer)
     time.sleep(3)'''
-    #send(('PRINT_MONITOR', ), to=processMon)
-    await(some(received(('READ_FILE_DONE',dataRead,fileName2)), 
-                                    has=fileName == fileName2))
-
-        output('THIS IS THE DATA READ!!!!!',dataRead)    
-
+    #send(('PRINT_MONITOR', ), to=processMon)   
     
-    output('THIS IS THE DATA READ!!!!!',dataRead)    
-    '''
 
-    send(('DELETE', 1, 'abc.txt'), to = client1)
+    send(('DELETE','abc.txt'), to = client1)
     await(received(('DONE',)))
     

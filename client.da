@@ -30,7 +30,7 @@ class GFSClient(process):
                              has= c2 > c and fileName == fileName1))
         return res
 
-    def receive(msg=('CREATE_MSG',threadId,fileName)):
+    def receive(msg=('CREATE_MSG', fileName)):
         try:
             send(('START_PROCESS', 'Create'), to= pmon)
             if(exists(fileName)):        
@@ -58,7 +58,7 @@ class GFSClient(process):
                 send(('ERROR_CREATE',message),to=nodeof(self))
                 send(('ERROR_CREATE',fileName), to = master)    
 
-    def receive(msg= ('WRITE_MSG', threadId, fileName, dataToWrite)):
+    def receive(msg= ('WRITE_MSG', fileName, dataToWrite)):
         try:
             send(('START_PROCESS', 'Write'), to= pmon)
             c = logical_clock()
@@ -143,7 +143,7 @@ class GFSClient(process):
         send(('UPDATE_LAST_CHUNK_DATA', fileName, chunkuuids[-1], len(chunks[-1])), to= master) 
 
         
-    def receive(msg= ('WRITE_APPEND_MSG', threadId, fileName, dataToWrite)):
+    def receive(msg= ('WRITE_APPEND_MSG', fileName, dataToWrite)):
         try:
             send(('START_PROCESS', 'RecordAppend'), to= pmon)
             if not self.exists(fileName):
@@ -171,8 +171,8 @@ class GFSClient(process):
                     chunkuuids = []
                     c = logical_clock()
                     output('IN append else')
-                    send(('ALLOC_APPEND_MASTER', threadId, fileName, numChunks, c), to= master)
-                    await(some(received(('ALLOC_APPEND_DONE',  pid, fileName1, chunkuuids, c2, chunkServerStore, chunkStore)),
+                    send(('ALLOC_APPEND_MASTER', fileName, numChunks, c), to= master)
+                    await(some(received(('ALLOC_APPEND_DONE', fileName1, chunkuuids, c2, chunkServerStore, chunkStore)),
                                          has= c2 > c and fileName == fileName1 ))
                     output('After await')
                     self.writeChunks(chunkuuids, dataToWrite, chunkServerStore, chunkStore, fileName)
@@ -180,8 +180,8 @@ class GFSClient(process):
                 chunkuuids = []
                 c = logical_clock()
                 output('IN append else')
-                send(('ALLOC_APPEND_MASTER', threadId, fileName, numChunks, c), to= master)
-                await(some(received(('ALLOC_APPEND_DONE',  pid, fileName1, chunkuuids, c2, chunkServerStore, chunkStore)),
+                send(('ALLOC_APPEND_MASTER', fileName, numChunks, c), to= master)
+                await(some(received(('ALLOC_APPEND_DONE', fileName1, chunkuuids, c2, chunkServerStore, chunkStore)),
                                      has= c2 > c and fileName == fileName1 ))
                 output('After await')
                 
@@ -217,15 +217,15 @@ class GFSClient(process):
                                 has= c3 > c and chunkuuid == chunkuuid3))   
         send(('UPDATE_LAST_CHUNK_DATA', fileName, chunkuuid, len(dataToWrite)+currChunkLen), to= master)
 
-    def receive(msg= ('READ_MSG', threadId, fileName)):
+    def receive(msg= ('READ_MSG',clock, fileName)):
         try:
             send(('START_PROCESS', 'Read'), to= pmon)
             if not self.exists(fileName):
                 raise Exception("FAIL1")
             chunks = []
             c = logical_clock()
-            send(('READ_MASTER', threadId, fileName,c), to= master)
-            await(some(received(('READ_MASTER_DONE',  pid, fileName1, c2, chunkServerStore,chunkuuids,chunkStore)),
+            send(('READ_MASTER', fileName,c), to= master)
+            await(some(received(('READ_MASTER_DONE', fileName1, c2, chunkServerStore,chunkuuids,chunkStore)),
                                  has= c2 > c and fileName == fileName1))
             output(chunkuuids)                  
             for chunkuuid in chunkuuids:
@@ -241,7 +241,7 @@ class GFSClient(process):
                 chunks.append(chunk)
             dataRead = reduce(lambda x, y: x+y, chunks)
             send(('FINISH_PROCESS', 'Read'), to= pmon)
-            send(('READ_FILE_DONE',dataRead,fileName), to=nodeof(self))
+            send(('READ_FILE_DONE',dataRead,fileName, clock+1), to=nodeof(self))
         except Exception as e:
             #send(('FINISH_PROCESS_FAIL', 'Read'), to= pmon)
             if str(e) == "FAIL1":
@@ -253,16 +253,16 @@ class GFSClient(process):
                 message = 'File read error'
                 send(('ERROR_READ',message),to=nodeof(self))
                 output("*********************Error while reading file *************************" + str(e))
-                send(('READ_FILE_DONE',"",fileName), to=nodeof(self))
+                send(('READ_FILE_DONE',"",fileName, clock+1), to=nodeof(self))
 
-    def receive(msg= ('DELETE', threadId, fileName)):
+    def receive(msg= ('DELETE', fileName)):
         try:
             send(('START_PROCESS', 'Delete'), to= pmon)
             if not self.exists(fileName):
                 raise Exception("FAIL1")
             c = logical_clock()
-            send(('DELETE_FILE_MASTER', threadId, fileName, c), to= master)                         # send and await message from master server
-            if await(some(received(('DELETE_FILE_MASTER_DONE', res, fileName1, c2)),
+            send(('DELETE_FILE_MASTER', fileName, c), to= master)                         # send and await message from master server
+            if await(some(received(('DELETE_FILE_MASTER_DONE', fileName1, c2)),
                                  has= c2 > c and fileName == fileName1)):
                 output('File ', fileName, ' deleted successfully')
             elif timeout(10):
@@ -280,7 +280,7 @@ class GFSClient(process):
                 send(('DELETE_DONE',fileName), to=nodeof(self))
             
 
-    def receive(msg= ('CREATE_SNAPSHOT', threadId, fileName)):
+    def receive(msg= ('CREATE_SNAPSHOT', fileName)):
         try:
             send(('START_PROCESS', 'CreateSnapshot'), to= pmon)
             if not self.exists(fileName):
@@ -295,8 +295,8 @@ class GFSClient(process):
                             
             output("Got lease for Snapshot")
             c = logical_clock()
-            send(('READ_MASTER', threadId, fileName,c), to= master)
-            await(some(received(('READ_MASTER_DONE',  pid, fileName1, c2, chunkServerStore,chunkuuids,chunkStore)),
+            send(('READ_MASTER',  fileName,c), to= master)
+            await(some(received(('READ_MASTER_DONE', fileName1, c2, chunkServerStore,chunkuuids,chunkStore)),
                                  has= c2 > c and fileName == fileName1))
             
             res = True

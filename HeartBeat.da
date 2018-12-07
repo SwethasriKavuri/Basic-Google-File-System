@@ -28,7 +28,7 @@ class HeartBeat(process):
         if await(len(self.availableChunkServers) == len(self.heartBeatFromChunks)):
             output('All chunk servers are responding')
         elif timeout(20):
-            output('Inside else if', self.heartBeatFromChunks)
+            output('Chunk Servers available', self.heartBeatFromChunks)
             nonAvailableChunkServers = self.availableChunkServers - self.heartBeatFromChunks
             output("Chunk servers not available", nonAvailableChunkServers)
         send(('UPDATE_AVAILABLE_CHUNK_SERVERS', nonAvailableChunkServers), to = master)

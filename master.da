@@ -63,7 +63,6 @@ class Master(process):
     def receive(msg= ('ALLOC_MASTER', isCreate, fileName, numChunks, c),from_= client):
         output('Inside master to allocate', fileName)
         chunkuuids = self.allocate(fileName, numChunks, isCreate)
-        output('In master chunks', chunkuuids)
         send(('ALLOC_DONE', fileName, chunkuuids, c+1, chunkServerStore,
                  chunkStore ), to=client)
 
@@ -76,14 +75,14 @@ class Master(process):
         self.fileStore[fileName] = chunkuuids
         return chunkuuids
     
-    def receive(msg = ('ALLOC_APPEND_MASTER', pid, fileName, numChunks, c), from_=client):
+    def receive(msg = ('ALLOC_APPEND_MASTER', fileName, numChunks, c), from_=client):
         chunkuuids = self.allocate_append(fileName, numChunks)
-        send(('ALLOC_APPEND_DONE', pid, fileName, chunkuuids, c+1,
+        send(('ALLOC_APPEND_DONE', fileName, chunkuuids, c+1,
                  chunkServerStore, chunkStore ), to=client)
 
 
-    def receive(msg = ('READ_MASTER', pid, fileName,c), from_=client):
-        send(('READ_MASTER_DONE', pid, fileName, c+1, 
+    def receive(msg = ('READ_MASTER', fileName,c), from_=client):
+        send(('READ_MASTER_DONE', fileName, c+1, 
         self.chunkServerStore, self.fileStore[fileName], self.chunkStore), to=client)          
 
     
@@ -114,25 +113,23 @@ class Master(process):
              chunkLocList, chunkServerLocal, c+1), to= client)
 
     
-    def receive(msg = ('DELETE_FILE_MASTER', pid, fileName, c), from_=client):
+    def receive(msg = ('DELETE_FILE_MASTER', fileName, c), from_=client):
         output('Inside delete File master')
         fileDeleted = delete(fileName)
         if fileDeleted:
-            send(('DELETE_FILE_MASTER_DONE', pid, fileName, c+1), to=client)
-        elif timeout(6):
+            send(('DELETE_FILE_MASTER_DONE', fileName, c+1), to=client)
+        else:
+            output('Raising exception')
             raise Exception("Error while deleting file "+fileName)  
     
     def delete(fileName):
         try:
+            output('In delete')
             addToGarbageList(fileStore[fileName])        
             if fileName in self.snapShotuuids:
-                output(self.snapShotuuids[fileName])
                 addToGarbageList(self.snapShotuuids[fileName])
                 del self.snapShotuuids[fileName]
             del fileStore[fileName]
-            
-            output(fileStore)
-            output(self.deletedChunksList)
             return True
         except:
             output('Error while deleting file')
@@ -141,9 +138,6 @@ class Master(process):
     def receive(msg =('FILE_EXISTS_MASTER', fileName, c), from_= client):
         self.res = exists(fileName)
         output(res, client)
-        # currChunkUuid = self.lastChunkOfFileStore[fileName][0]
-        # currChunkLen = self.lastChunkOfFileStore[fileName][1]
-        # chunkuuids = self.fileStore[fileName]
         send(('FILE_EXISTS_MASTER_DONE', self.res, fileName, c+1), to=client)
         output("RES sent : ", res)
         
@@ -163,13 +157,14 @@ class Master(process):
         localChunkList = {}
         for chunkServer,chunkuuids in self.deletedChunksList.items():
             if chunkServer not in self.nonAvailableChunkServers:
-                output('in Chunk files to delete')
+            
                 chunkFilesToDelete =[]
                 for  chunkuuid in chunkuuids:
                     if chunkuuid in fileList[chunkServer]:
                         chunkFilesToDelete.append(chunkuuid)
                 if len(chunkFilesToDelete) != 0:
                     send(('DELETED_CHUNKS', chunkFilesToDelete), to= chunkServer)
+                localChunkList[chunkServer] = list(set(chunkuuids) - set(chunkFilesToDelete))
             else:
                 localChunkList[chunkServer] = chunkuuids
         self.deletedChunksList = localChunkList
