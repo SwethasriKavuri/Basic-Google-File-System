@@ -14,7 +14,7 @@ class GFSClient(process):
         self.master = master
         self.pmon = pmon
         self.temp = None
-        self.chunkSize = 128
+        self.chunkSize = 1024
         
 
     def getNumChunks(size):

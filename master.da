@@ -22,7 +22,7 @@ class Master(process):
         self.deletedChunksList = {}
         self.leaseQueue = {}                # Maps fileName with client requests
         self.numChunkServer = 5
-        self.chunkSize = 128
+        self.chunkSize = 1024
         self.counter = 0
         self.res = False
         self.numReplicas = 3
@@ -88,8 +88,11 @@ class Master(process):
 
 
     def receive(msg = ('READ_MASTER', fileName,c), from_=client):
+        localChunkStore = {}
+        for chunk in self.fileStore[fileName]:
+            localChunkStore[chunk] = chunkStore[chunk]
         send(('READ_MASTER_DONE', fileName, c+1, 
-        self.chunkServerStore, self.fileStore[fileName], self.chunkStore), to=client)          
+        self.chunkServerStore, self.fileStore[fileName], localChunkStore), to=client)          
 
     
     def allocate_append(fileName, numChunks):

@@ -16,7 +16,7 @@ def main():
     start(master1)
 
     clients = []
-    for i in range(200):
+    for i in range(5):
         client1 = new(GFSClient)
         setup(client1, (master1,processMon))
         start(client1)
@@ -33,10 +33,9 @@ def main():
     send(('WRITE_MSG',fileName, s1), to=clients[0])
     await(some(received(('WRITTEN', fileName2)),has=fileName == fileName2))
     
-    for i in range(200):
+    for i in range(5):
         send(('WRITE_APPEND_MSG', 'abc.txt', s2), to=clients[i])
 
-    time.sleep(25)
+    time.sleep(3)
     send(('PRINT_MONITOR', ), to=processMon)
     await(received(('DONE',)))
-    
