@@ -34,238 +34,284 @@ def main():
     fileNameThree = 'file3.txt'
     fileNameFour = 'file4.txt'
     fileNameFive = 'file5.txt'
-    testCase = 16
+    testCase = int(sys.argv[1]) if len(sys.argv) > 1 else 0
 
     if(testCase == 0):
-        #Testing Create
-        send(('CREATE_MSG', 1, fileNameOne), to=client1)
+        #Testing Create (Negative Test Case)
+        output("************Testing Create Function**************")
+        send(('CREATE_MSG',fileNameOne), to=client1)
         await(some(received(('CREATED', fileName2)), has=fileNameOne == fileName2))
-        send(('CREATE_MSG', 1, fileNameOne), to=client1)
+        send(('CREATE_MSG',fileNameOne), to=client1)
         await(some(received(('ERROR_CREATE', message))))
         assert(message == 'File error, file exists already')
+        output("************End of Test Case*********************")
 
     if(testCase == 1):
-        #Testing Write
-        send(('CREATE_MSG', 1, fileNameOne), to=client1)
+        #Testing Write (Negative Test Case)
+        output("************Testing Write Function**************")
+        send(('CREATE_MSG',fileNameOne), to=client1)
         await(some(received(('CREATED', fileName2)), has=fileNameOne == fileName2))
-        send(('WRITE_MSG',1,fileNameOne, s1), to=client3)
+        send(('WRITE_MSG',fileNameOne, s1), to=client3)
         await(some(received(('WRITTEN', fileName2)),has=fileNameOne == fileName2))
-        send(('WRITE_MSG',1,fileNameTwo, s1), to=client2)
+        send(('WRITE_MSG',fileNameTwo, s1), to=client2)
         await(some(received(('ERROR_WRITE', message))))
         assert(message == 'File error, file doesnt exists')
+        output("************End of Test Case*********************")
 
     if(testCase == 2):
-        #Testing Delete
-        send(('CREATE_MSG', 1, fileNameOne), to=client1)
+        #Testing Delete (Negative Test Case)
+        output("************Testing Delete Function**************")
+        send(('CREATE_MSG',fileNameOne), to=client1)
         await(some(received(('CREATED', fileName2)), has=fileNameOne == fileName2))
-        send(('DELETE', 1, fileNameTwo), to = client1)
+        send(('DELETE',fileNameTwo), to = client1)
         await(some(received(('ERROR_DELETE', message))))
         assert(message == 'File Doesnt Exist to Delete')
+        output("************End of Test Case*********************")
 
     if(testCase == 3):
-        #Testing READ
-        send(('CREATE_MSG', 1, fileNameOne), to=client1)
+        #Testing READ (Negative Test Case)
+        output("************Testing Read Function**************")
+        send(('CREATE_MSG',fileNameOne), to=client1)
         await(some(received(('CREATED', fileName2)), has=fileNameOne == fileName2))
-        send(('READ_MSG', 1, fileNameTwo), to=client4) 
+        c = logical_clock()
+        send(('READ_MSG',c,fileNameTwo), to=client4) 
         await(some(received(('ERROR_READ', message))))
         assert(message == 'File Doesnt Exist to read')
+        output("************End of Test Case*********************")
     
     if(testCase == 4):
-        #Testing Record Append
-        send(('CREATE_MSG', 1, fileNameOne), to=client1)
+        #Testing Record Append (Negative Test Case)
+        output("************Testing Record Append Function**************")
+        send(('CREATE_MSG',fileNameOne), to=client1)
         await(some(received(('CREATED', fileName2)), has=fileNameOne == fileName2))
-        send(('WRITE_APPEND_MSG', 1, fileNameTwo, s2), to=client3)
+        send(('WRITE_APPEND_MSG',fileNameTwo, s2), to=client3)
         await(some(received(('ERROR_APPEND', message))))
         assert(message == 'File Doesnt Exist to do record append')
+        output("************End of Test Case*********************")
          
     if(testCase == 5):
-        #Testing Snapshot
-        send(('CREATE_MSG', 1, fileNameOne), to=client1)
+        #Testing Snapshot (Negative Test Case)
+        output("************Testing Snapshot Function**************")
+        send(('CREATE_MSG',fileNameOne), to=client1)
         await(some(received(('CREATED', fileName2)), has=fileNameOne == fileName2))
-        send(('CREATE_SNAPSHOT', 1, fileNameTwo), to = client1)
+        send(('CREATE_SNAPSHOT',fileNameTwo), to = client1)
         await(some(received(('ERROR_SNAPSHOT', message))))
         assert(message == 'File Doesnt Exist to create Snapshot')
+        output("************End of Test Case*********************")
 
     if(testCase == 6):
-        #Testing Create
-        send(('CREATE_MSG', 1, fileNameOne), to=client1)
+        #Testing Create (Positive Test Case)
+        output("************Testing Create Functionality**************")
+        send(('CREATE_MSG',fileNameOne), to=client1)
         await(some(received(('CREATED', fileName2)), has=fileNameOne == fileName2))
         output('**********File created successfully********',fileNameOne)
+        output("************End of Test Case*********************")
+
 
     if(testCase == 7):
-        #Testing Write
-        send(('CREATE_MSG', 1, fileNameOne), to=client1)
+        #Testing Write (Positive Test Case)
+        output("************Testing Write Functionality**************")
+        send(('CREATE_MSG',fileNameOne), to=client1)
         await(some(received(('CREATED', fileName2)), has=fileNameOne == fileName2))
-        send(('WRITE_MSG',1,fileNameOne, s1), to=client3)
+        send(('WRITE_MSG',fileNameOne, s1), to=client3)
         await(some(received(('WRITTEN', fileName2)),has=fileNameOne == fileName2))
         output('**********File written successfully********',fileNameOne)
+        output("************End of Test Case*********************")
 
     if(testCase == 8):
-        #Testing Delete
-        send(('CREATE_MSG', 1, fileNameOne), to=client1)
+        #Testing Delete (Positive Test Case)
+        output("************Testing Delete Functionality**************")
+        send(('CREATE_MSG',fileNameOne), to=client1)
         await(some(received(('CREATED', fileName2)), has=fileNameOne == fileName2))
-        send(('DELETE', 1, fileNameOne), to = client1)
+        send(('DELETE',fileNameOne), to = client1)
         await(some(received(('DELETE_DONE', fileName2)),has=fileNameOne == fileName2))
         output('**********File deleted successfully********',fileNameOne)
+        output("************End of Test Case*********************")
  
     if(testCase == 9):
-        #Testing READ
-        send(('CREATE_MSG', 1, fileNameOne), to=client1)
+        #Testing READ (Positive Test Case)
+        output("************Testing Read Functionality**************")
+        send(('CREATE_MSG',fileNameOne), to=client1)
         await(some(received(('CREATED', fileName2)), has=fileNameOne == fileName2))
-        send(('WRITE_MSG',1,fileNameOne, s1), to=client3)
+        send(('WRITE_MSG',fileNameOne, s1), to=client3)
         await(some(received(('WRITTEN', fileName2)),has=fileNameOne == fileName2))
-        send(('READ_MSG', 1, fileNameOne), to=client4) 
-        await(some(received(('READ_FILE_DONE',dataRead,fileName2)), 
+        c = logical_clock()
+        send(('READ_MSG',c,fileNameOne), to=client4) 
+        await(some(received(('READ_FILE_DONE',dataRead,fileName2,c2)), 
                                         has=fileNameOne == fileName2))
+        output("****************Heere*****************")
         output('**********File read successfully********',fileNameOne)
         output('*************Data Read is ***********',dataRead)
+        output("************End of Test Case*********************") 
 
     if(testCase == 10):
-        #Testing Record Append
-        send(('CREATE_MSG', 1, fileNameOne), to=client1)
+        #Testing Record Append (Positive Test Case)
+        output("************Testing Record Append Functionality**************")
+        send(('CREATE_MSG',fileNameOne), to=client1)
         await(some(received(('CREATED', fileName2)), has=fileNameOne == fileName2))
-        send(('WRITE_APPEND_MSG', 1,fileNameOne, s2), to=client1)
+        send(('WRITE_APPEND_MSG',fileNameOne, s2), to=client1)
         await(some(received(('RECORD_APPEND_DONE',))))
         output('**********Record appended successfully********',fileNameOne)
-        send(('READ_MSG', 1, fileNameOne), to=client4) 
-        await(some(received(('READ_FILE_DONE',dataRead,fileName2)), 
+        c = logical_clock()
+        send(('READ_MSG',c,fileNameOne), to=client4) 
+        await(some(received(('READ_FILE_DONE',dataRead,fileName2,c2)), 
                                         has=fileNameOne == fileName2))
         output('*************Data written to File is***********',dataRead)
+        output("************End of Test Case*********************")
 
 
     if(testCase == 11):
-        #Testing Snapshot
-        send(('CREATE_MSG', 1, fileNameOne), to=client1)
+        #Testing Snapshot (Positive Test Case)
+        output("************Testing Snapshot Functionality**************")
+        send(('CREATE_MSG',fileNameOne), to=client1)
         await(some(received(('CREATED', fileName2)), has=fileNameOne == fileName2))
-        send(('WRITE_APPEND_MSG', 1, fileNameOne, s2), to=client4)
+        send(('WRITE_APPEND_MSG',fileNameOne, s2), to=client4)
         time.sleep(2)
-        send(('CREATE_SNAPSHOT', 1, fileNameOne), to = client1)
+        send(('CREATE_SNAPSHOT',fileNameOne), to = client1)
         time.sleep(2)
-        output('**************Snapshot Created successfully*******************') 
+        output('**************Snapshot Created successfully*******************')
+        output("************End of Test Case*********************")  
         
-    if(testCase == 12):  
-        send(('CREATE_MSG', 1, fileNameOne), to=client1)
+    if(testCase == 12): 
+        #End-To-End Testing
+        output("************Testing End-to-End Functionality**************")
+        send(('CREATE_MSG',fileNameOne), to=client1)
         await(some(received(('CREATED', fileName2)), has=fileNameOne == fileName2))
-        send(('CREATE_MSG', 1, fileNameTwo), to=client2)
+        send(('CREATE_MSG',fileNameTwo), to=client2)
         await(some(received(('CREATED', fileName2)), has=fileNameTwo == fileName2))
-        send(('WRITE_MSG',1,fileNameOne, s1), to=client3)
+        send(('WRITE_MSG',fileNameOne, s1), to=client3)
         await(some(received(('WRITTEN', fileName2)),has=fileNameOne == fileName2))
         s2 = 'Append1232'
-        send(('WRITE_APPEND_MSG', 1, fileNameOne, s2), to=client1)
+        send(('WRITE_APPEND_MSG',fileNameOne, s2), to=client1)
         time.sleep(1)
         s2 = 'Append4'
-        send(('WRITE_APPEND_MSG', 1, fileNameTwo, s2), to=client2) 
+        send(('WRITE_APPEND_MSG',fileNameTwo, s2), to=client2) 
         time.sleep(1)
         s2 = 'Append5'
-        send(('DELETE', 1, fileNameOne), to = client1)
+        send(('DELETE',fileNameOne), to = client1)
         await(some(received(('DELETE_DONE', fileName2)),has=fileNameOne == fileName2))
-        send(('WRITE_APPEND_MSG', 1, fileNameOne, s2), to=client3)
+        send(('WRITE_APPEND_MSG',fileNameOne, s2), to=client3)
         await(some(received(('ERROR_APPEND', message))))
         assert(message == 'File Doesnt Exist to do record append')
         time.sleep(1)
         s2 = 'Appending 6666'
-        send(('WRITE_APPEND_MSG', 1, fileNameTwo, s2), to=client4)
+        send(('WRITE_APPEND_MSG',fileNameTwo, s2), to=client4)
         time.sleep(2)
-        send(('CREATE_SNAPSHOT', 1, fileNameTwo), to = client1)
+        send(('CREATE_SNAPSHOT',fileNameTwo), to = client1)
         time.sleep(15)
-        send(('CREATE_SNAPSHOT', 1, fileNameTwo), to = client2)
+        send(('CREATE_SNAPSHOT',fileNameTwo), to = client2)
         time.sleep(15)
-        send(('READ_MSG', 1, fileNameOne), to=client4) 
-        await(some(received(('READ_FILE_DONE',dataRead,fileName2)), 
-                                        has=fileNameOne == fileName2))
-        output('THIS IS THE DATA READ!!!!!!!!!!!!!!!',dataRead)
-        send(('DELETE', 1, fileNameOne), to = client1)
+        c = logical_clock()
+        send(('READ_MSG',c,fileNameTwo), to=client4) 
+        await(some(received(('READ_FILE_DONE',dataRead,fileName2,c2)), 
+                                        has=fileNameTwo == fileName2 and c2>c))
+        output('*************Data Read from File is***********',dataRead)
+        send(('DELETE',fileNameOne), to = client1)
         await(received(('DONE',)))
 
     elif(testCase == 13): 
-        send(('CREATE_MSG', 1, fileNameOne), to=client1)
+        #End-To-End Testing
+        output("************Testing End-to-End Functionality**************")
+        send(('CREATE_MSG',fileNameOne), to=client1)
         await(some(received(('CREATED', fileName2)), has=fileNameOne == fileName2))
-        send(('CREATE_MSG', 1, fileNameTwo), to=client2)
+        send(('CREATE_MSG',fileNameTwo), to=client2)
         await(some(received(('CREATED', fileName2)), has=fileNameTwo == fileName2))
-        send(('DELETE', 1, fileNameOne), to = client1)
+        send(('DELETE',fileNameOne), to = client1)
         await(some(received(('DELETE_DONE', fileName2)),has=fileNameOne == fileName2))
-        send(('WRITE_MSG',1,fileNameTwo, s1), to=client3)
+        send(('WRITE_MSG',fileNameTwo, s1), to=client3)
         await(some(received(('WRITTEN', fileName2)),has=fileNameTwo == fileName2))
         s2 = 'Append1232'
-        send(('WRITE_APPEND_MSG', 1,fileNameTwo, s2), to=client1)
+        send(('WRITE_APPEND_MSG',fileNameTwo, s2), to=client1)
         time.sleep(1)
-        send(('CREATE_SNAPSHOT', 1, fileNameTwo), to = client3)
+        send(('CREATE_SNAPSHOT',fileNameTwo), to = client3)
         time.sleep(15)
-        send(('READ_MSG', 1, fileNameTwo), to=client4) 
-        await(some(received(('READ_FILE_DONE',dataRead,fileName2)), 
+        c = logical_clock()
+        send(('READ_MSG',c,fileNameTwo), to=client4) 
+        await(some(received(('READ_FILE_DONE',dataRead,fileName2,c2)), 
                                         has=fileNameTwo == fileName2))
         output('*******************THIS IS THE DATA READ from file**********************',dataRead)
-        send(('READ_MSG', 1, fileNameThree), to=client4) 
+        send(('READ_MSG',c,fileNameThree), to=client4) 
         await(some(received(('ERROR_READ', message))))
         assert(message == 'File Doesnt Exist to read')
         await(received(('DONE',)))
 
     elif(testCase == 14):
-        send(('CREATE_MSG', 1, fileNameOne), to=client1)
+        #End-To-End Testing
+        output("************Testing End-to-End Functionality**************")
+        send(('CREATE_MSG',fileNameOne), to=client1)
+        await(some(received(('CREATED', fileName2)), has=fileNameOne == fileName2))
+        send(('CREATE_MSG',fileNameTwo), to=client2)
         await(some(received(('CREATED', fileName2)), has=fileNameTwo == fileName2))
-        send(('CREATE_MSG', 1, fileNameTwo), to=client2)
-        await(some(received(('CREATED', fileName2)), has=fileNameTwo == fileName2))
-        send(('WRITE_MSG',1,fileNameThree, s1), to=client3)
+        send(('WRITE_MSG',fileNameThree, s1), to=client3)
         await(some(received(('ERROR_WRITE', message))))
         assert(message == 'File error, file doesnt exists')
         s2 = 'Append1232'
-        send(('WRITE_APPEND_MSG', 1,fileNameTwo, s2), to=client1)
+        send(('WRITE_APPEND_MSG',fileNameTwo, s2), to=client1)
         time.sleep(1)
-        send(('CREATE_SNAPSHOT', 1, fileNameTwo), to = client3)
+        send(('CREATE_SNAPSHOT',fileNameTwo), to = client3)
         time.sleep(15)
-        send(('READ_MSG', 1, fileNameOne), to=client4) 
-        await(some(received(('READ_FILE_DONE',dataRead,fileName2)), 
-                                        has=fileNameOne == fileName2))
+        c = logical_clock()
+        send(('READ_MSG',c,fileNameOne), to=client4) 
+        await(some(received(('READ_FILE_DONE',dataRead,fileName2,c2)), 
+                                        has=fileNameOne == fileName2 and c2>c))
         output('****************************THIS IS THE DATA READ from file*******************',dataRead)
-        send(('READ_MSG', 1, fileNameThree), to=client4) 
-        send(('DELETE', 1, fileNameOne), to = client1)
+        c = logical_clock()
+        send(('READ_MSG',c,fileNameThree), to=client4) 
+        send(('DELETE',fileNameOne), to = client1)
         await(received(('DONE',)))
 
     elif(testCase == 15):
-        send(('CREATE_MSG', 1, fileNameOne), to=client1)
+        #End-To-End Testing
+        output("************Testing End-to-End Functionality**************")
+        send(('CREATE_MSG',fileNameOne), to=client1)
         await(some(received(('CREATED', fileName2)), has=fileNameOne == fileName2))
-        send(('CREATE_MSG', 1, fileNameTwo), to=client2)
+        send(('CREATE_MSG',fileNameTwo), to=client2)
         await(some(received(('CREATED', fileName2)), has=fileNameTwo == fileName2))
-        send(('WRITE_MSG',1,fileNameOne, s1), to=client3)
+        send(('WRITE_MSG',fileNameOne, s1), to=client3)
         await(some(received(('WRITTEN', fileName2)),has=fileNameOne == fileName2))
         s2 = 'Append1232'
-        send(('WRITE_APPEND_MSG', 1, fileNameOne, s2), to=client1)
+        send(('WRITE_APPEND_MSG',fileNameOne, s2), to=client1)
         time.sleep(1)
         s2 = 'Append4'
-        send(('WRITE_APPEND_MSG', 1, fileNameTwo, s2), to=client2) 
+        send(('WRITE_APPEND_MSG',fileNameTwo, s2), to=client2) 
         time.sleep(1)
         s2 = 'Append5'
-        send(('WRITE_APPEND_MSG', 1, fileNameOne, s2), to=client3)
+        send(('WRITE_APPEND_MSG',fileNameThree, s2), to=client3)
         await(some(received(('ERROR_APPEND', message))))
         time.sleep(1)
         s2 = 'Appending 6666'
-        send(('WRITE_APPEND_MSG', 1, fileNameTwo, s2), to=client4)
+        send(('WRITE_APPEND_MSG',fileNameTwo, s2), to=client4)
         time.sleep(2)
-        send(('CREATE_SNAPSHOT', 1, fileNameTwo), to = client1)
+        send(('CREATE_SNAPSHOT',fileNameTwo), to = client1)
         time.sleep(1)
-        send(('CREATE_SNAPSHOT', 1, fileNameTwo), to = client2)
+        send(('CREATE_SNAPSHOT',fileNameTwo), to = client2)
         time.sleep(1)
-        send(('READ_MSG', 1, fileNameOne), to=client4) 
-        await(some(received(('READ_FILE_DONE',dataRead,fileName2)), 
-                                        has=fileNameOne == fileName2))
-        output('THIS IS THE DATA READ!!!!!!!!!!!!!!!',dataRead)
-        send(('DELETE', 1, fileNameOne), to = client1)
+        c=logical_clock()
+        output("****************Here***************")
+        send(('READ_MSG',c,fileNameOne), to=client4) 
+        await(some(received(('READ_FILE_DONE',dataRead,fileName2,c2)), 
+                                        has=fileNameOne == fileName2 and c2>c))
+        output('***************Data Read from file is ***************',dataRead)
+        send(('DELETE',fileNameOne), to = client1)
         await(received(('DONE',)))
 
     elif(testCase == 16):
-        send(('CREATE_MSG', 1, fileNameOne), to=client1)
+        #End-To-End Testing
+        output("************Testing End-to-End Functionality**************")
+        send(('CREATE_MSG',fileNameOne), to=client1)
         await(some(received(('CREATED', fileName2)), has=fileNameOne == fileName2))
-        send(('WRITE_MSG',1,fileNameOne, s1), to=client1)
+        send(('WRITE_MSG',fileNameOne, s1), to=client1)
         await(some(received(('WRITTEN', fileName2)),has=fileNameOne == fileName2))
         s2 = 'Append1232'
-        send(('WRITE_APPEND_MSG', 1, fileNameOne, s2), to=client1)
+        send(('WRITE_APPEND_MSG',fileNameOne, s2), to=client1)
         s2 = 'Append2'
-        send(('WRITE_APPEND_MSG', 1, fileNameOne, s2), to=client2)
-        send(('CREATE_SNAPSHOT', 1, fileNameOne), to = client3)
+        send(('WRITE_APPEND_MSG',fileNameOne, s2), to=client2)
+        send(('CREATE_SNAPSHOT',fileNameOne), to = client3)
         time.sleep(2)
-        send(('READ_MSG', 1, fileNameOne), to=client1) 
-        await(some(received(('READ_FILE_DONE',dataRead,fileName2)), 
-                                    has=fileNameOne == fileName2))
+        c=logical_clock()
+        send(('READ_MSG',c,fileNameOne), to=client1) 
+        await(some(received(('READ_FILE_DONE',dataRead,fileName2,c2)), 
+                                    has=fileNameOne == fileName2 and c2>c))
         output('****************Data Read before killing chunk server ***********',dataRead)
         output('************Killing Chunk Server***********************')
         c=logical_clock()
@@ -275,9 +321,11 @@ def main():
         output(chunkServer)
         send(('DONE',), to =chunkServer)
         time.sleep(3)
-        send(('READ_MSG', 1, fileNameOne), to=client1) 
-        await(some(received(('READ_FILE_DONE',dataRead,fileName2)), 
-                                    has=fileNameOne == fileName2))
+        c= logical_clock()
+        send(('READ_MSG',c,fileNameOne), to=client1) 
+        await(some(received(('READ_FILE_DONE',dataRead,fileName2,c2)), 
+                                    has=fileNameOne == fileName2 and c2>c))
         output('****************Data Read after killing chunk server ***********',dataRead)
-        send(('DELETE', 1, fileNameOne), to = client1)
+        send(('DELETE',fileNameOne), to = client1)
         await(received(('DONE',)))
+        output("************End of Test Case*********************")
