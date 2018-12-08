@@ -68,7 +68,7 @@ class GFSClient(process):
             if await(some(received(('CLIENT_TURN_IN_LEASE_Q_WRITE', fileName1, c1)), 
                                     has= c1 > c and fileName == fileName1)):
                 pass
-            elif timeout(10):
+            elif timeout(100):
                 raise Exception("Write taking too long for file:", fileName)
             output("Got lease for write") 
             
@@ -86,7 +86,7 @@ class GFSClient(process):
                 if await(some(received(('ALLOC_DONE', fileName1, chunkuuids, c2, chunkServerStore, chunkStore)),
                                      has= c2 > c and fileName == fileName1 )):
                     self.writeChunks(chunkuuids, dataToWrite, chunkServerStore, chunkStore, fileName)
-                elif timeout(10):
+                elif timeout(100):
                     raise Exception("Error while writing file:"+ fileName)
             else:
                 raise Exception("FAIL2")
