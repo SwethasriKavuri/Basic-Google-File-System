@@ -40,18 +40,18 @@ def main():
     await(some(received(('WRITTEN', fileName2)),has=fileName == fileName2))
     
     s2 = 'Append1232'
-    send(('WRITE_APPEND_MSG', 'abc.txt', s2), to=client1)
+    send(('RECORD_APPEND_MSG', 'abc.txt', s2), to=client1)
     s2 = 'Append2'
-    send(('WRITE_APPEND_MSG', 'abc.txt', s2), to=client2)
+    send(('RECORD_APPEND_MSG', 'abc.txt', s2), to=client2)
     '''
     s2 = 'Append3'
-    send(('WRITE_APPEND_MSG', 'abc.txt', s2), to=client3)
+    send(('RECORD_APPEND_MSG', 'abc.txt', s2), to=client3)
     s2 = 'Appending 1111'
-    send(('WRITE_APPEND_MSG', 'abc.txt', s2), to=client4)
+    send(('RECORD_APPEND_MSG', 'abc.txt', s2), to=client4)
     time.sleep(2)
     send(('CREATE_SNAPSHOT', 'abc.txt'), to = client1)
     s2 = 'Appending 555'
-    #send(('WRITE_APPEND_MSG', 'abc.txt', s2), to=client5)
+    #send(('RECORD_APPEND_MSG', 'abc.txt', s2), to=client5)
     '''
     
     send(('CREATE_SNAPSHOT', 'abc.txt'), to = client3)
@@ -61,16 +61,15 @@ def main():
     await(some(received(('READ_FILE_DONE',dataRead,fileName2, c2)), 
                                     has=fileName == fileName2 and c2>c))
     output('THIS IS THE DATA READ!!!!!',dataRead)
-    
     '''
     c=logical_clock()
 
     send(('KILL_CHUNKSERVER',c), to=client2)
     await(some(received(('KILL',chunkServer,c2)), 
                                     has=c2>c))
-    output(chunkServer)
-    send(('DONE',), to =chunkServer)
-    time.sleep(3)'''
+    
+    time.sleep(3)
+    '''
     #send(('PRINT_MONITOR', ), to=processMon)   
     
 

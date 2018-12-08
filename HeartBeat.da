@@ -10,19 +10,34 @@ class HeartBeat(process):
     
     def setup(master:Master):
         output('Setting up HeartBeat')
-        self.heartBeatFromChunks = set()
+        #Stores the set of heartBeats recieved in each call
+        self.heartBeatFromChunks = set()    
+        
+        #Stores the list of available chunkServers to which HeartBeat needs to poll
         self.availableChunkServers = set()
+        
+        #Map which stores the list of files send from chunkServer in a call  
         self.filesList = {}
+        
         self.master = master
 
         
     def sendHeartBeat():
+        '''
+        Helper method to send HeartBeat message to all chunkServers and await their 
+        replies and then send it to master for updates.
+        '''
+        
         output('Inside Send Heart Beat')
         self.heartBeatFromChunks = set()
         nonAvailableChunkServers =set()
+        
+        #Obatain the list of chunkServers from master
         if len(self.availableChunkServers)==0:
             send(('GET_AVAILABLE_CHUNK_SERVERS',), to = master)
             await(len(self.availableChunkServers)!=0)        
+        
+        # Send heartbeat message to all the chunkServers and await their replies    
         for chunkServer in self.availableChunkServers:
             send(('HEARTBEAT',), to = chunkServer)
         if await(len(self.availableChunkServers) == len(self.heartBeatFromChunks)):
@@ -31,13 +46,26 @@ class HeartBeat(process):
             output('Chunk Servers available', self.heartBeatFromChunks)
             nonAvailableChunkServers = self.availableChunkServers - self.heartBeatFromChunks
             output("Chunk servers not available", nonAvailableChunkServers)
+        
+        #Updates master with list of chunkServers which are not available
         send(('UPDATE_AVAILABLE_CHUNK_SERVERS', nonAvailableChunkServers), to = master)
+        
+        #Send the list of file obtained from chunkServers to master to be checked for garbage collection
         send(('DELETE_ORPHANED_CHUNKS', self.filesList), to=master)
      
     def receive(msg=('AVAILABLE_CHUNK_SERVERS', availableChunkServers), from_=master):
+        '''
+        Receive handler to get the availableChunkServers from master
+        '''
+        
         self.availableChunkServers = availableChunkServers
         
     def receive(msg=('HEARTBEAT_ACKNOWLEDGED',files), from_=chunkServer):
+        '''
+        Receive handler for Heartbeat acknowledgement from the chunkServers and
+        adding the list of files sent from ChunkServer to be checked for existence
+        '''
+        
         output("Heart beat received from", chunkServer)
         self.heartBeatFromChunks.add(chunkServer)
         localFileList = []
@@ -48,4 +76,4 @@ class HeartBeat(process):
     def run():
         while True:
             sendHeartBeat()
-            time.sleep(10)            
+            time.sleep(10)            #Running heartbeat process every 10 seconds

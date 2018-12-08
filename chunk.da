@@ -3,19 +3,37 @@ import time
 import os
 config(channel is fifo, clock is lamport)
 
+'''
+GFS chunkServers that is responsible for storing the files and performing all 
+phyical operations related to chunks
+'''
 class GFSChunkserver(process):
 
     def setup(chunkloc:int):
         output('Setting up chunk', chunkloc)
         self.chunkloc = chunkloc
         self.chunktable = {}
-        self.localStore = {} # stores the uuid and data corresponding to it
+        
+        # stores the uuid and data corresponding to it
+        self.localStore = {} 
+        
         self.localFilesystemRoot = "/tmp/gfs/chunks/" + repr(chunkloc)
         if not os.access(self.localFilesystemRoot, os.W_OK):
             os.makedirs(self.localFilesystemRoot)
 
     def receive(msg= ('WRITE_CHUNK',chunkuuid, chunkloc,chunkServerLocal, c, toAppend),from_ = sender):
+        '''
+        This is the write method in case the chunkServer is acting as a primary for storing the chunk.
+        This method takes in the chunkuuid, chunklocations, to Append flag and writes the
+        data to physical storage. 
+        '''
+        
         output('Inside write chunk method')
+        
+        '''
+        As per section 3.1 point 5, The primary forwards the write request to all secondary replicas.
+        Each secondary replica applies mutations in the same serial number order assigned by the primary.
+        '''
         for i in range(0, len(chunkServerLocal)):
             c1 = logical_clock()
             send(('WRITE_CHUNK_SECONDARY',chunkuuid, toAppend, c1), to = chunkServerLocal[i])
@@ -24,25 +42,50 @@ class GFSChunkserver(process):
             output('Written',i)
         success = write(chunkuuid,self.localStore[chunkuuid], toAppend)
         del self.localStore[chunkuuid]
+        '''
+        As per section 3.1 point 7, The primary replies to the client. Any errors encountered at 
+        any of the replicas are reported to the client.
+        '''
         send(('WRITE_CHUNK_DONE',success, chunkuuid , c+1),to= sender)
     
     def receive(msg= ('WRITE_CHUNK_SECONDARY',chunkuuid, toAppend, c),from_ = sender):
+        '''
+        This is the write method in case the chunkServer is acting as a replica for storing the chunk.
+        '''
+        
         output('Inside write secondary')
+        
+        '''
+        As per section 3.1 point 5 and 6, Each secondary replica applies mutations in the same serial
+        number order assigned by the primary. The secondaries all reply to the primary indicating
+        that they have completed the operation.
+        '''
         success = write(chunkuuid, self.localStore[chunkuuid], toAppend)
         del self.localStore[chunkuuid]
         output('Written in secondary')
         send(('WRITE_CHUNK_SECONDARY_DONE',success, chunkuuid, c +1),to= sender)
      
     def receive(msg= ('READ_CHUNK',chunkuuid,c),from_ = sender):
+        '''
+        This method reads a particular chunk and returns back to the client
+        '''
+        
         chunk = read(chunkuuid)
         send(('READ_CHUNK_DONE',chunk,c+1),to= sender)
-
-    def receive(msg= ('GET_FILE_NAME',chunkuuid),from_ = sender):
-        filename = chunkFileName(chunkuuid)
-        send(('CHUNK_FILE_NAME',filename),to= sender)
     
     def receive(msg= ('STORE_DATA', chunkloc, chunkuuid, chunk,chunkServerLocal, c), from_ = sender):
+        '''
+        This method stores the data passed by client before writing it to phyical storage.
+        '''
+        
         output('Inside Store data', chunkuuid, chunk)
+        
+        '''
+        As per section 3.2, to fully utilize each machine’s networkbandwidth, the data is pushed linearly along a
+        chain of chunkservers rather than distributed in some other topology (e.g., tree). Thus, each machine’s full
+        outbound bandwidth is used to transfer the data as fast as possible rather than divided among multiple recipients.
+        '''
+        
         self.localStore[chunkuuid] = chunk
         if(len(chunkServerLocal)>0):    
             send(('STORE_DATA', chunkloc[1:], chunkuuid, chunk,chunkServerLocal[1:], c ), to= chunkServerLocal[0])
@@ -51,6 +94,9 @@ class GFSChunkserver(process):
         send(('STORE_DATA_DONE',c+1, chunkuuid ), to = sender)
 
     def write(chunkuuid, chunk, toAppend):
+        '''
+        Helper method to write the chunk to local storage and reply if data was written successfully or not.
+        '''
         output('Writing chunk', chunk, chunkuuid)
         try:
             localFilename = self.chunkFileName(chunkuuid)
@@ -68,6 +114,9 @@ class GFSChunkserver(process):
             return False
 
     def read(chunkuuid):
+        '''
+        Helper method to read data from the passed chunkuuid and return it.
+        '''
         data = None
         localFilename = self.chunkFileName(chunkuuid)
         with open(localFilename, "r") as f:
@@ -75,20 +124,32 @@ class GFSChunkserver(process):
         return data
 
     def chunkFileName(chunkuuid):
+        '''
+        Helper method to get the actual path for a chunkuuid
+        '''
         localFilename = self.localFilesystemRoot + "/" \
             + str(chunkuuid) + '.gfs'
         return localFilename
 
     def receive(msg =('HEARTBEAT',), from_= heartBeat):
-        # Randomly select at max 5 files and send them to master to check if
-        # they exist or they should be deleted
-        
+        '''
+        This method acknowledges the HEARTBEAT message and sends in a list of randomly
+        selected files(5 for now) to master to check if they need to be deleted or they are still
+        prevalent. 
+        '''
+        '''
+        As per section 4.4.1, In a HeartBeat message regularly exchanged with the master,
+        each chunkserver reports a subset of the chunks it has
+        '''
         files  = os.listdir(self.localFilesystemRoot)
         if len(files)>5:
             files  =files[0:5]
         send(('HEARTBEAT_ACKNOWLEDGED',files), to=heartBeat)
     
     def receive(msg =('DELETED_CHUNKS', chunkuuids), from_= master):
+        '''
+        This method deleted the chunks physically from the file system.
+        '''
         output('To delete',chunkuuids)
         for file in chunkuuids:
             localFileName = chunkFileName(file)
@@ -96,11 +157,18 @@ class GFSChunkserver(process):
                 os.remove(localFileName)
     
     def receive(msg = ('WRITE_CHUNK_SNAPSHOT', chunkuuid, c), from_=client):
+        '''
+        This method creates the snapshot version for the passed in chunkuuid
+        '''
         chunk = read(chunkuuid)
+        '''
+        As per section 3.4, By creating the new chunkon the same chunkservers as the original,
+        we ensure that the data can be copied locally,
+        '''
         new_chunkuuid = chunkuuid+'-SNAPSHOT'
         res = write(new_chunkuuid, chunk, False)
         send(('WRITE_CHUNK_SNAPSHOT_DONE', chunkuuid, c+1, res), to=client)
         
     def run():
-         await(received(('DONE',)))
-         output('CHUNK SERVER KILLED')
+        await(received(('DONE',)))
+        output('CHUNK SERVER KILLED')

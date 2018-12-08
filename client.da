@@ -6,31 +6,47 @@ from ProcessMonitor import ProcessMonitor
 config(channel is fifo, clock is lamport)
 from functools import reduce
 
-
+'''
+GFS client that interacts with the external user and also communicates with
+master and chunkserver
+'''
 class GFSClient(process):
     
     def setup(master:Master, pmon:ProcessMonitor):
         output('Setting up client', master)
         self.master = master
         self.pmon = pmon
-        self.temp = None
-        self.chunkSize = 1024
+        self.chunkSize =10
         
 
     def getNumChunks(size):
-        output(size)
+        '''
+        Helper method which returns number of chunks given the size of data
+        '''
         return ceil(float(size)/self.chunkSize)
 
     def exists(fileName):
+        '''
+        Helper method to check if a file exisits or not.
+        '''
+        
         res = None
-        output('Searching for file', fileName)
         c = logical_clock()
-        send(('FILE_EXISTS_MASTER', fileName, c), to= master)                 # send and await message from master server
+        send(('FILE_EXISTS_MASTER', fileName, c), to= master)                
         await(some(received(('FILE_EXISTS_MASTER_DONE', res, fileName1, c2)),
                              has= c2 > c and fileName == fileName1))
         return res
 
     def receive(msg=('CREATE_MSG', fileName)):
+        '''
+        Create API: It takes in a fileName and creates and allocates a storage for this file
+        on the chunkServers and creates the fileStore mapping for this file. It send error 
+        messages for the following:
+        1. User is trying to create file which has already been created.
+        2. In case of any other errors it reports back the error and free up the mapping and 
+        space, if allocated before failure. 
+        '''
+        
         try:
             send(('START_PROCESS', 'Create'), to= pmon)
             if(exists(fileName)):        
@@ -39,16 +55,16 @@ class GFSClient(process):
             numChunks = 1
             chunkuuids = []
             c = logical_clock()
-            send(('ALLOC_MASTER', True, fileName, numChunks, c), to= master)           # send and await message from master server
-            await(some(received(('ALLOC_DONE', fileName1, chunkuuids, c2, chunkServerStore, chunkStore)),
-                                 has= c2 > c and fileName == fileName1 ))
+            send(('ALLOC_MASTER', True, fileName, numChunks, c), to= master)           
+            await(some(received(('ALLOC_DONE', fileName1, chunkuuids, c2, 
+                        chunkServerStore, chunkStore)),has= c2 > c and fileName == fileName1 ))
             self.writeChunks(chunkuuids,'',chunkServerStore,chunkStore,fileName)
             send(('FINISH_PROCESS', 'Create'), to= pmon)
             send(('CREATED',fileName), to=nodeof(self))
         except Exception as e:
             send(('FINISH_PROCESS_FAIL', 'Create'), to= pmon)
             if str(e) == "FAIL1":
-                output("****************File error, file exists already:********************" + fileName)
+                output("*************File error, file exists already:****************" + fileName)
                 message = 'File error, file exists already'
                 send(('ERROR_CREATE',message),to=nodeof(self))
                 send('File error, file exists already:' + fileName,to=nodeof(self))
@@ -59,6 +75,16 @@ class GFSClient(process):
                 send(('ERROR_CREATE',fileName), to = master)    
 
     def receive(msg= ('WRITE_MSG', fileName, dataToWrite)):
+        ''' 
+        WRITE API: This API takes in a fileName and dataToWrite and writes the data
+        to the various chunks as allocated by the Master. It send error messages for the following:
+        1. User is trying to write to a file which has not been created yet.
+        2. User is trying to write again to a file to which he has already written.
+        In this case he should call a write append.
+        3. In case of any other errors, we delete the whole file by removing the mappings
+        which had been created and deallocating the space that had been allocated for it.
+        '''
+        
         try:
             send(('START_PROCESS', 'Write'), to= pmon)
             c = logical_clock()
@@ -112,6 +138,13 @@ class GFSClient(process):
             
             
     def writeChunks(chunkuuids, dataToWrite, chunkServerStore, chunkStore, fileName):
+        '''
+        This is a helper method which takes in the allocated chunkuuids, dataToWrite
+        chunkServerStore, chunkStore, fileName and writes the data to physical servers
+        by communicating with them. At the end of processing it updates the last chunk 
+        for the file which is utilized in record append and write process.
+        ''' 
+        
         output('inside write chunks', chunkStore)
         chunks = [ dataToWrite[x: x+self.chunkSize] for x in range(0, len(dataToWrite), self.chunkSize) ]
         if len(chunks) ==0:
@@ -126,11 +159,21 @@ class GFSClient(process):
             for j in range(1, chunkLocLength):
                 chunkServerLocal.append(chunkServerStore[chunkloc[j]])
             
-            send(('STORE_DATA', chunkloc[1:], chunkuuids[i], chunks[i],chunkServerLocal, c), to= chunkServerStore[chunkloc[0]])
-            
+            '''
+            As per section 3.1 point 3, The client pushes the data to all the replicas.
+            A client can do so in any order
+            '''
+            send(('STORE_DATA', chunkloc[1:], chunkuuids[i], chunks[i],chunkServerLocal, c),
+                         to= chunkServerStore[chunkloc[0]])
+            '''
+            As per section 3.1 point 4, Once all the replicas have acknowledged receiving the
+            data, the client sends a write request to the primary. The request identifies the
+            data pushed earlier to all of the replicas.
+            '''
             if await(some(received(('STORE_DATA_DONE', c2, chunkuuid2)),
                              has= c2 > c and chunkuuids[i] == chunkuuid2 )):
-                send(('WRITE_CHUNK', chunkuuids[i],chunkloc[1:], chunkServerLocal, c, False), to= chunkServerStore[chunkloc[0]])      # send and await message from chunk server
+                send(('WRITE_CHUNK', chunkuuids[i],chunkloc[1:], chunkServerLocal,
+                 c, False), to= chunkServerStore[chunkloc[0]])      
             elif timeout(10):
                 raise Exception("Error while writing file:"+ fileName)
                 
@@ -143,7 +186,15 @@ class GFSClient(process):
         send(('UPDATE_LAST_CHUNK_DATA', fileName, chunkuuids[-1], len(chunks[-1])), to= master) 
 
         
-    def receive(msg= ('WRITE_APPEND_MSG', fileName, dataToWrite)):
+    def receive(msg= ('RECORD_APPEND_MSG', fileName, dataToWrite)):
+        '''
+        RECORD APPEND API: This API takes in the fileName, dataToWrite and appends
+        the data to the end of the file. It send error messages for the following:
+        1. User is trying to write to a file which has not been created yet.
+        2. In case of any other errors, we delete the newly allocated chunks by removing the 
+        mappings which had been created and deallocating the space that had been allocated for it.
+        '''
+        
         try:
             send(('START_PROCESS', 'RecordAppend'), to= pmon)
             if not self.exists(fileName):
@@ -153,8 +204,8 @@ class GFSClient(process):
             if await(some(received(('CLIENT_TURN_IN_LEASE_Q_APPEND', fileName1, c3)), 
                                     has= c3 > c and fileName == fileName1)):
                 pass
-            elif timeout(100):
-                raise Exception("Snapshot creation taking too long for file:", fileName) 
+            elif timeout(10):
+                raise Exception("Record append taking too long:", fileName) 
             
             numChunks = self.getNumChunks(len(dataToWrite))
             
@@ -162,21 +213,39 @@ class GFSClient(process):
                 output('In append if')
                 c = logical_clock()
                 send(('GET_LAST_CHUNK_DATA', fileName, c), to= master)
-                await(some(received(('GET_LAST_CHUNK_DATA_DONE', fileName1, chunkuuid, currChunkLen, chunkLocList, chunkServerLocal, c1)), 
+                await(some(received(('GET_LAST_CHUNK_DATA_DONE', fileName1, chunkuuid,
+                                     currChunkLen, chunkLocList, chunkServerLocal, c1)), 
                                         has= c1 > c and fileName == fileName1))
                 output('After await', dataToWrite, self.chunkSize, currChunkLen)
+                '''
+                As per section 3.3,The primary checks to see if appending the record to the current chunk
+                would cause the chunkto exceed the maximum size
+                '''
                 if(len(dataToWrite) <= (self.chunkSize - currChunkLen)):
-                    addToExistingChunkFile(fileName1, chunkuuid, currChunkLen, chunkLocList, chunkServerLocal, dataToWrite)
+                    addToExistingChunkFile(fileName1, chunkuuid, currChunkLen,
+                     chunkLocList, chunkServerLocal, dataToWrite)
                 else:
+                    '''
+                    As per section 3.3, If so, it pads the chunkto the maximum size, tells secondaries
+                    to do the same, and replies to the client indicating that the operation should be 
+                    retried on the next chunk.
+                    '''
                     chunkuuids = []
                     c = logical_clock()
                     output('IN append else')
                     send(('ALLOC_APPEND_MASTER', fileName, numChunks, c), to= master)
-                    await(some(received(('ALLOC_APPEND_DONE', fileName1, chunkuuids, c2, chunkServerStore, chunkStore)),
+                    await(some(received(('ALLOC_APPEND_DONE', fileName1, chunkuuids,
+                                         c2, chunkServerStore, chunkStore)),
                                          has= c2 > c and fileName == fileName1 ))
                     output('After await')
                     self.writeChunks(chunkuuids, dataToWrite, chunkServerStore, chunkStore, fileName)
             else:
+            
+                '''
+                As per section 3.3, If so, it pads the chunkto the maximum size, tells secondaries
+                to do the same, and replies to the client indicating that the operation should be 
+                retried on the next chunk.
+                '''
                 chunkuuids = []
                 c = logical_clock()
                 output('IN append else')
@@ -200,30 +269,55 @@ class GFSClient(process):
             else:
                 output("Error while record append:"+str(e) )
                 #Cleanup to remove the half written files
-                send(('ERROR_WRITE_APPEND',fileName), to = master)
+                send(('ERROR_RECORD_APPEND',fileName), to = master)
         finally:
             send(('PROCESS_NEXT_IN_LEASE_Q', fileName), to= master)
 
 
     def addToExistingChunkFile(fileName, chunkuuid, currChunkLen, chunkLocList, chunkServerLocal, dataToWrite):
+        '''
+        This is a helper method which is used to append data in case the file system
+        doesn't require extra chunks to be allocated and it needs to append it to the last chunk
+        '''
+        
         output('inside addToExistingChunkFile', chunkuuid)
+        '''
+        As per section 3.3, If the record fits within the maximum size, which is the common case,
+        the primary appends the data to its replica, tells the secondaries to write the data at 
+        the exact offset where it has, and finally replies success to the client
+        '''
         c = logical_clock()
         send(('STORE_DATA', chunkLocList[1:], chunkuuid, dataToWrite, chunkServerLocal[1:], c), to= chunkServerLocal[0])
-        await(some(received(('STORE_DATA_DONE', c2, chunkuuid2)),
-                         has= c2 > c and chunkuuid == chunkuuid2 ))
-        send(('WRITE_CHUNK', chunkuuid,chunkLocList[1:], chunkServerLocal[1:], c, True), to= chunkServerLocal[0])      # send and await message from chunk server
-        output('After send')
-        await(some(received(('WRITE_CHUNK_DONE',success, chunkuuid3 , c3)), 
-                                has= c3 > c and chunkuuid == chunkuuid3))   
-        send(('UPDATE_LAST_CHUNK_DATA', fileName, chunkuuid, len(dataToWrite)+currChunkLen), to= master)
+        if await(some(received(('STORE_DATA_DONE', c2, chunkuuid2)),
+                         has= c2 > c and chunkuuid == chunkuuid2 )):
+            send(('WRITE_CHUNK', chunkuuid,chunkLocList[1:], chunkServerLocal[1:], c, True), to= chunkServerLocal[0])
+        elif timeout(10):
+            raise Exception("Record append taking too long to write data:", fileName) 
+            
+        if await(some(received(('WRITE_CHUNK_DONE',success, chunkuuid3 , c3)), 
+                                has= c3 > c and chunkuuid == chunkuuid3)):
+            send(('UPDATE_LAST_CHUNK_DATA', fileName, chunkuuid, len(dataToWrite)+currChunkLen), to= master)
+        elif timeout(10):
+            raise Exception("Record append taking too long to write data:", fileName)
 
     def receive(msg= ('READ_MSG',clock, fileName)):
+        '''
+        READ API: This API takes in fileName and return the data corresponding to 
+        the current file. It send error messages for the following:
+        1. User is trying to read a file which does not exist.
+        2. In case of any other errors it returns back an empty string.
+        '''
+        
         try:
             send(('START_PROCESS', 'Read'), to= pmon)
             if not self.exists(fileName):
                 raise Exception("FAIL1")
             chunks = []
             c = logical_clock()
+            '''
+            As per section 2.4,  the client typically asks for multiple chunks in the same request(in our case the whole file)
+            and the master can also include the information for chunks immediately following those requested.
+            '''
             send(('READ_MASTER', fileName,c), to= master)
             await(some(received(('READ_MASTER_DONE', fileName1, c2, chunkServerStore,chunkuuids,chunkStore)),
                                  has= c2 > c and fileName == fileName1))
@@ -231,6 +325,10 @@ class GFSClient(process):
             for chunkuuid in chunkuuids:
                 c = logical_clock()
                 chunkloc = chunkStore[chunkuuid]
+                '''
+                As per section 2.4, The client then sends a request to one of the replicas,
+                most likely the closest one(we send to all and await reply from one).
+                '''
                 for chunklocation in chunkloc:
                     send(('READ_CHUNK',chunkuuid,c), to= chunkServerStore[chunklocation])
                 if await(some(received(('READ_CHUNK_DONE',chunk,c2)),
@@ -255,7 +353,15 @@ class GFSClient(process):
                 output("*********************Error while reading file *************************" + str(e))
                 send(('READ_FILE_DONE',"",fileName, clock+1), to=nodeof(self))
 
+
     def receive(msg= ('DELETE', fileName)):
+        '''
+        DELETE API: This API takes in a fileName and deletes the file corresponding
+        the current file. It send error messages for the following:
+        1. User is trying to delete a file which does not exist.
+        2. In case of any other errors it logs the error.
+        '''
+        
         try:
             send(('START_PROCESS', 'Delete'), to= pmon)
             if not self.exists(fileName):
@@ -277,10 +383,18 @@ class GFSClient(process):
                 output("****************************File error, file does not exists to delete************************* " + fileName)
             else:
                 output("Error while deleting file:" + fileName)
-                send(('DELETE_DONE',fileName), to=nodeof(self))
+                send(('ERROR_DELETE',fileName), to=nodeof(self))
             
 
     def receive(msg= ('CREATE_SNAPSHOT', fileName)):
+        ''' 
+        SNAPSHOT API: This API takes in a fileName and creates a snapshot of it. It updates
+        the metadata once the snapshot creation has completed succesfully
+        It send error messages for the following:
+        1. User is trying to create a snapshot of a file which has not been created yet.
+        3. In case of any other errors, we log the error.
+        '''
+        
         try:
             send(('START_PROCESS', 'CreateSnapshot'), to= pmon)
             if not self.exists(fileName):
@@ -300,6 +414,12 @@ class GFSClient(process):
                                  has= c2 > c and fileName == fileName1))
             
             res = True
+            '''
+            As per section 3.4, After the leases have been revoked or have expired, the master logs
+            the operation to disk. It then applies this log record to its in-memory state by duplicating
+            the metadata for the source file or directory tree. The newly created snapshot files point 
+            to the same chunks as the source files
+            '''
             for chunkuuid in chunkuuids:
                 chunkloc = chunkStore[chunkuuid]
                 for chunklocation in chunkloc:
@@ -326,18 +446,22 @@ class GFSClient(process):
                 send(('ERROR_SNAPSHOT',message),to=nodeof(self))
                 output("**********************File error, file does not exists to create Snapshot************************* " + fileName)
             else:
-                output()
+                output('Error', str(e))
         finally:
             send(('PROCESS_NEXT_IN_LEASE_Q', fileName), to= master)
     
     def receive(msg= ('KILL_CHUNKSERVER',c)):
-        output("In client for kill")
+        '''
+        KILL CHUNKSERVER: This API was developed for testing. It randomly selects
+        one of the chunkServers, deletes it and returns back.
+        The main deletes the chunkServer
+        '''
         send(('KILL_CHUNKSERVER', c), to= master)
         await(some(received(('KILL_CHUNK', chunkServer, c3)), 
                                     has= c3 > c))
-        send(('KILL', chunkServer, c3+1), to = nodeof(self))
-            
+        send(('DONE',), to =chunkServer)
+        output("Chunk Server killed", chunkServer)
+        send(('KILL', chunkServer, c3+1), to = nodeof(self))   
         
-    def run():
-        #exists('abxc.txt')   
+    def run():  
         await(received(('DONE',)))

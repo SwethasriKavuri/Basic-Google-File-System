@@ -15,25 +15,63 @@ class Master(process):
 
     def setup():
         output('Setting up Master')
-        self.fileStore = {}                 # Maps filename to chunkuuids
-        self.chunkStore = {}                # Maps chunkuuids to chunk locations
-        self.chunkServerStore = {}          # Maps chunk location to physical server/storage
-        self.lastChunkOfFileStore = {}      # Maps every file with last chunkid and length of last chunk
-        self.deletedChunksList = {}
-        self.leaseQueue = {}                # Maps fileName with client requests
-        self.numChunkServer = 5
-        self.chunkSize = 1024
-        self.counter = 0
-        self.res = False
-        self.numReplicas = 3
+        '''
+        As per Section 2.6, The master stores three major types of metadata: the file
+        and chunknamespaces, the mapping from files to chunks, and the locations of each chunk’s replicas.
+        '''
+        # Maps filename to chunkuuids
+        self.fileStore = {}                 
+        
+        # Maps chunkuuids to chunk locations
+        self.chunkStore = {}                
+        
+        # Maps chunk location to physical server/storage
+        self.chunkServerStore = {}
+        
+        # Maps fileName to chunkuuid before snapshot 
         self.snapShotuuids ={}
+        
+        #Stores the set of chunkServers available
         self.availableChunkServers = set()
+        
+        #Stores the set of chunkServers which are not responding
         self.nonAvailableChunkServers =set()
-        self.tempStore = {}
+        
+        # Maps fileName and chunkuuids allocated in that operation
+        self.tempStore = {}                 
+        
+        # Maps every file with last chunkid and length of last chunk                  
+        self.lastChunkOfFileStore = {}
+        
+        # Maps chunkServers to list of files that needs to be deleted from it              
+        self.deletedChunksList = {}
+        
+        # Maps fileName with client requests
+        self.leaseQueue = {}               
+        
+        '''
+        As per section 2.3, 
+        For reliability, each chunkis replicated on multiple chunkservers. By default, we store three replicas,
+        '''
+        self.numReplicas = 3
+         
+        self.numChunkServer = 5
+        
+        self.chunkSize = 10
+        
+        self.counter = 0
+        
+        self.res = False
+        
         self.initChunks()
         
     
     def initChunks():
+        '''
+        This method creates the chunkServers and creates the mapping for chunkServerStore.
+        It also adds the chunkServers to availablChunkServers.
+        '''
+        
         output('Setting up chunkServer')
         for i in range(0, self.numChunkServer):
             chunkServer = new(GFSChunkserver)
@@ -41,8 +79,14 @@ class Master(process):
             start(chunkServer)
             self.chunkServerStore[i] = chunkServer
             self.availableChunkServers.add(chunkServer)
+
     
     def allocateChunks(numChunks):
+        '''
+        This is a helper method which allocates chunks for the files and creates
+        the chunkLocations where these chunks needs to be replicated. 
+        '''
+        
         output('Allocating chunks')
         chunkuuids = []
         for i in range(0, numChunks):
@@ -59,8 +103,14 @@ class Master(process):
             self.chunkStore[chunkuuid] = chunkLocations
             self.counter = (self.counter+1) % self.numChunkServer
         return chunkuuids
+
      
     def receive(msg= ('ALLOC_MASTER', isCreate, fileName, numChunks, c),from_= client):
+        '''
+        Receive handler which allocate chunks and return the chunkuuids and the physical stores
+        for the chunkuuids
+        '''
+        
         output('Inside master to allocate', fileName)
         chunkuuids = self.allocate(fileName, numChunks, isCreate)
         localChunkStore = {}
@@ -69,7 +119,12 @@ class Master(process):
         send(('ALLOC_DONE', fileName, chunkuuids, c+1, chunkServerStore,
                  localChunkStore ), to=client)
 
+
     def allocate(fileName, numChunks, isCreate):
+        '''
+        Helper method to allocate chunks and update it in tempStore and fileStore
+        '''
+        
         chunkuuids = self.allocateChunks(numChunks)
         self.tempStore[fileName] = chunkuuids
         output('Chunks allocated')
@@ -77,8 +132,14 @@ class Master(process):
             chunkuuids = self.fileStore[fileName]+ chunkuuids
         self.fileStore[fileName] = chunkuuids
         return chunkuuids
+
     
     def receive(msg = ('ALLOC_APPEND_MASTER', fileName, numChunks, c), from_=client):
+        '''
+        Receive handler which allocates chunks and return the chunkuuids and the pysical stores
+        for the chunkuuids when the file is being in record append mode
+        '''
+        
         chunkuuids = self.allocate_append(fileName, numChunks)
         localChunkStore = {}
         for chunk in chunkuuids:
@@ -87,31 +148,61 @@ class Master(process):
                  chunkServerStore, localChunkStore ), to=client)
 
 
+
     def receive(msg = ('READ_MASTER', fileName,c), from_=client):
+        '''
+        Receive handler which returns the chunkuuids and its storage locations to client
+        '''
+
         localChunkStore = {}
         for chunk in self.fileStore[fileName]:
             localChunkStore[chunk] = chunkStore[chunk]
+        
         send(('READ_MASTER_DONE', fileName, c+1, 
         self.chunkServerStore, self.fileStore[fileName], localChunkStore), to=client)          
 
     
     def allocate_append(fileName, numChunks):
+        '''
+        Helper method to allocate chunkuuid in record append mode and update it for
+        fileStore
+        '''
+        
         chunkuuids = self.allocateChunks(numChunks)
         chunkuuids_initial = self.fileStore[fileName]
         chunkuuids_initial.extend(chunkuuids)
+        self.tempStore[fileName] = chunkuuids
         output('Allocate_append', chunkuuids_initial)
         return chunkuuids
 
+
     def receive(msg = ('UPDATE_LAST_CHUNK_DATA', fileName, chunkuuid, chunklen), from_=client):
+        '''
+        Updates last chunkuuid and length of the last chunk for the fileName and stores
+        it in lastChunkOfFileStore map
+        '''
+        
         self.lastChunkOfFileStore[fileName] = [chunkuuid, chunklen]
 
+
     def receive(msg = ('LATEST_CHUNK_DATA', fileName, c), from_=client):
+        '''
+        Receive handler to return the last chunkuuid and the length of the last chunkuuid for the
+        fileName
+        '''
+        
         chunkuuid = lastChunkOfFileStore[fileName][0]
         currChunkLen = lastChunkOfFileStore[fileName][1]
         chunkuuids = fileStore[fileName]
         send(('LATEST_CHUNK_DATA_DONE',chunkuuid,currChunkLen,chunkuuids,fileName,c+1), to=client)   
 
+
     def receive(msg = ('GET_LAST_CHUNK_DATA', fileName, c), from_=client):
+        '''
+        Receive handler to return the last chunkuuid, length of the last chunkuuid and its physical storage
+        for the fileName
+        '''
+        
         chunkuuid = lastChunkOfFileStore[fileName][0]
         currChunkLen = lastChunkOfFileStore[fileName][1]
         chunkLocList = chunkStore[lastChunkOfFileStore[fileName][0]]
@@ -123,6 +214,11 @@ class Master(process):
 
     
     def receive(msg = ('DELETE_FILE_MASTER', fileName, c), from_=client):
+        '''
+        Receive handler which takes in request to delete a file and returns back 
+        if the file was successfully deleted or not
+        '''
+        
         output('Inside delete File master')
         fileDeleted = delete(fileName)
         if fileDeleted:
@@ -130,10 +226,21 @@ class Master(process):
         else:
             output('Raising exception')
             raise Exception("Error while deleting file "+fileName)  
+
     
     def delete(fileName):
+        '''
+        Helper method that assists in deleting a file and remove mapping from fileStore
+        and snapShotuuids
+        '''
+        
+        
         try:
             output('In delete')
+            '''
+            As per section 4.4.1, When a file is deleted by the application, the master logs the deletion immediately just like other changes.
+            However instead of reclaiming resources immediately, the file is just renamed to a hidden name(In our case we store in a separate map)
+            '''
             addToGarbageList(fileStore[fileName])        
             if fileName in self.snapShotuuids:
                 addToGarbageList(self.snapShotuuids[fileName])
@@ -143,26 +250,55 @@ class Master(process):
         except:
             output('Error while deleting file')
             return False
+
             
     def receive(msg =('FILE_EXISTS_MASTER', fileName, c), from_= client):
+        '''
+        Receive handler which checks if a file exists or not
+        '''
+        
         self.res = exists(fileName)
-        output(res, client)
         send(('FILE_EXISTS_MASTER_DONE', self.res, fileName, c+1), to=client)
-        output("RES sent : ", res)
+
         
     def exists(fileName):
+        '''
+        Helper method to check if a file exists in fileStore or not
+        '''
+        
         output('Checking file', fileName)
         if fileName in self.fileStore:
             return True
         return False
+
     
     def receive(msg = ('GET_AVAILABLE_CHUNK_SERVERS', ), from_=heartBeat):
+        '''
+        Receive handler to return the available chunkServers to heartbeat
+        '''
+        
         send(('AVAILABLE_CHUNK_SERVERS',self.availableChunkServers), to = heartBeat)
+
     
     def receive(msg = ('UPDATE_AVAILABLE_CHUNK_SERVERS', nonAvailableChunkServers), from_= heartBeat):
+        '''
+        Recieve handler that updates the nonAvailableChunkServers list
+        '''
+        
         self.nonAvailableChunkServers = nonAvailableChunkServers
+
     
     def receive(msg = ('DELETE_ORPHANED_CHUNKS', fileList), from_=heartBeat):
+        '''
+        Recieve handler which performs garbage collection by passing in list of files
+        to each chunkserver, that needs to be deleted from it 
+        '''
+        
+        '''
+        As per section 4.4.1, In a HeartBeat message regularly exchanged with the master,
+        each chunkserver reports a subset of the chunks it has, and the master replies with
+        the identity of all chunks that are no longer present in the master’s metadata
+        '''
         localChunkList = {}
         for chunkServer,chunkuuids in self.deletedChunksList.items():
             if chunkServer not in self.nonAvailableChunkServers:
@@ -180,9 +316,21 @@ class Master(process):
     
 
     def receive(msg =('ADD_TO_LEASE_Q', fileName, c, operation), from_= client):
+        '''
+        Recieve handler that adds a file and the operation being performed on it
+        to the leaseQueue.
+        '''
+        
         output('Adding to lease Q from client ', client)
         if fileName not in leaseQueue:
             leaseQueue[fileName] = []
+        '''
+        As per section 3.4, When the master receives a snapshot request, it first revokes 
+        any outstanding leases on the chunks in the files it is about to snapshot. This 
+        ensures that any subsequent writes to these chunks will require an interaction
+        with the master to find the lease holder. This will give the master an opportunity 
+        to create a new copy of the chunk first
+        '''
         if operation=='SNAPSHOT and len(leaseQueue[fileName])>1':
             output(leaseQueue[fileName])
             leaseQueue[fileName].insert(1,(client,operation,c))
@@ -191,7 +339,13 @@ class Master(process):
             leaseQueue[fileName].append((client,operation,c))
         checkQueueAndReturn(fileName, client, c, operation)
 
+
     def checkQueueAndReturn(fileName, client, c, operation):
+        '''
+        Helper method which checks if the fileName having the operation from client is
+        next in the queue to be processed.
+        '''
+        
         if leaseQueue[fileName][0][0] == client and leaseQueue[fileName][0][1] == operation:
             output('Chance given to ', client, operation)
             msg  ='CLIENT_TURN_IN_LEASE_Q_'+operation 
@@ -201,14 +355,29 @@ class Master(process):
             output('Chance not given to ', client)
             #send(('CLIENT_TURN_IN_LEASE_Q', fileName, c), to= client)
 
+
     def receive(msg =('PROCESS_NEXT_IN_LEASE_Q', fileName), from_= client):
+        '''
+        Receive handler which gets a signal to process the next request from the lease queue
+        for the file as the previous operation got over
+        '''
+        
+        if fileName in self.tempStore:
+            del self.tempStore[fileName]
+            
         leaseQueue[fileName].pop(0)
         if len(leaseQueue[fileName]) != 0:
-            output("Lease for",leaseQueue[fileName][0])
             output("Lease Queue", leaseQueue[fileName])
-            checkQueueAndReturn(fileName, leaseQueue[fileName][0][0], leaseQueue[fileName][0][2], leaseQueue[fileName][0][1])
+            checkQueueAndReturn(fileName, leaseQueue[fileName][0][0],
+             leaseQueue[fileName][0][2], leaseQueue[fileName][0][1])
+
     
     def receive(msg=('UPDATE_SNAPSHOT', fileName, c), from_=client):
+        '''
+        Recieve handler which updates all the maps as required after the snapshot 
+        process is complete
+        '''
+        
         chunkuuids = self.fileStore[fileName]
         if fileName not in self.snapShotuuids:
             self.snapShotuuids[fileName] = []
@@ -224,46 +393,75 @@ class Master(process):
         self.lastChunkOfFileStore[fileName] = updatedLastChunk
         self.fileStore[fileName] = new_chunkuuids
         send(('UPDATE_SNAPSHOT_DONE', fileName, c+1), to = client)
+
     
     def addToGarbageList(chunkuuids):
+        '''
+        Helper method which takes in list of chunkuuids and them in the list
+        of chunkuuids to be deleted on each chunkStore
+        '''
+        
         for chunkuuid in chunkuuids:
-                output(self.chunkStore[chunkuuid])
                 for chunkLoc in self.chunkStore[chunkuuid]:
                     if self.chunkServerStore[chunkLoc] not in self.deletedChunksList:
                         self.deletedChunksList[self.chunkServerStore[chunkLoc]] = []
                     self.deletedChunksList[self.chunkServerStore[chunkLoc]].append(chunkuuid)
+
     
     def receive(msg=('ERROR_CREATE',fileName), from_=client):
+        '''
+        Error handler which deletes the entry from fileStore and tempStore
+         if there was any error while creating a file
+        '''
+        
         if fileName in self.fileStore:
             addToGarbageList(fileStore[fileName])        
             del self.fileStore[fileName]
             if fileName in self.tempStore:           
                 del self.tempStore[fileName] 
+
     
     def receive(msg=('ERROR_WRITE',fileName), from_=client):
+        '''
+        Error handler which deletes the entry from fileStore and tempStore if there
+        was an error while writing to a file
+        '''
+        
         if fileName in self.fileStore:
             addToGarbageList(fileStore[fileName])
             del self.fileStore[fileName]
             if fileName in self.tempStore[fileName]:           
                 del self.tempStore[fileName] 
-        output(self.fileStore)
-        output(self.tempStore)
+
     
-    def receive(msg=('ERROR_WRITE_APPEND',fileName), from_=client):
+    def receive(msg=('ERROR_RECORD_APPEND',fileName), from_=client):
+        '''
+        Error handler which deletes the entry from tempStore and the corresponding 
+        chunkuuids for that file from fileStore
+        '''
+        
         if fileName in self.tempStore:
             addToGarbageList(self.tempStore[fileName])
             for chunkuuid in self.tempStore[fileName]:
                 if chunkuuid in self.fileStore[fileName]:
                     self.fileStore[fileName].remove(chunkuuid)           
             del self.tempStore[fileName] 
+
     
     def receive(msg=('KILL_CHUNKSERVER', c ), from_=client):
+        '''
+        Helper method to delete a chunkServer at random from the available list of 
+        chunkServers
+        '''
         
-        id = randint(0, len(self.availableChunkServers))
+        id = randint(0, len(self.availableChunkServers)-1)
         output("In master for kill", id)
         send(('KILL_CHUNK',self.chunkServerStore[id], c+1), to= client )
-            
+
+                    
     def run():
+    
+        #Starts the heartBeat process
         heartBeat =  new(HeartBeat)
         setup(heartBeat, (self,))
         start(heartBeat)
