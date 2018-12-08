@@ -14,7 +14,7 @@ class GFSClient(process):
         self.master = master
         self.pmon = pmon
         self.temp = None
-        self.chunkSize =10
+        self.chunkSize = 128
         
 
     def getNumChunks(size):
@@ -153,7 +153,7 @@ class GFSClient(process):
             if await(some(received(('CLIENT_TURN_IN_LEASE_Q_APPEND', fileName1, c3)), 
                                     has= c3 > c and fileName == fileName1)):
                 pass
-            elif timeout(10):
+            elif timeout(100):
                 raise Exception("Snapshot creation taking too long for file:", fileName) 
             
             numChunks = self.getNumChunks(len(dataToWrite))

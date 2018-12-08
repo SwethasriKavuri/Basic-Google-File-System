@@ -65,6 +65,20 @@ class ProcessMonitor(process):
         output('Read Q: ', readQ)
         output('Delete Q: ', deleteQ)
         output('Snapshot Q: ', createSnapshotQ)
+        
+        
+        times1 = [a[2] for a in recordAppendQ]
+        #times2 = [a[2] for a in readQ]
+        #times3 = [a[2] for a in writeQ]
+
+        timeTaken1 = max(times1) - min(times1)
+        #timeTaken2 = max(times2) - min(times2)
+        #timeTaken3 = max(times3) - min(times3)
+
+        output('Time taken for ', len(times1)/2, ' record appends: ', timeTaken1)
+        #output('Time taken for reads: ', timeTaken2)
+        #output('Time taken for writes: ', timeTaken3)
+        
         output('######################################## LOGS END ########################################')
 
     def run():

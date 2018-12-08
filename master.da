@@ -22,7 +22,7 @@ class Master(process):
         self.deletedChunksList = {}
         self.leaseQueue = {}                # Maps fileName with client requests
         self.numChunkServer = 5
-        self.chunkSize = 10
+        self.chunkSize = 128
         self.counter = 0
         self.res = False
         self.numReplicas = 3
@@ -63,8 +63,11 @@ class Master(process):
     def receive(msg= ('ALLOC_MASTER', isCreate, fileName, numChunks, c),from_= client):
         output('Inside master to allocate', fileName)
         chunkuuids = self.allocate(fileName, numChunks, isCreate)
+        localChunkStore = {}
+        for chunk in chunkuuids:
+            localChunkStore[chunk] = chunkStore[chunk]
         send(('ALLOC_DONE', fileName, chunkuuids, c+1, chunkServerStore,
-                 chunkStore ), to=client)
+                 localChunkStore ), to=client)
 
     def allocate(fileName, numChunks, isCreate):
         chunkuuids = self.allocateChunks(numChunks)
@@ -77,8 +80,11 @@ class Master(process):
     
     def receive(msg = ('ALLOC_APPEND_MASTER', fileName, numChunks, c), from_=client):
         chunkuuids = self.allocate_append(fileName, numChunks)
+        localChunkStore = {}
+        for chunk in chunkuuids:
+            localChunkStore[chunk] = chunkStore[chunk]
         send(('ALLOC_APPEND_DONE', fileName, chunkuuids, c+1,
-                 chunkServerStore, chunkStore ), to=client)
+                 chunkServerStore, localChunkStore ), to=client)
 
 
     def receive(msg = ('READ_MASTER', fileName,c), from_=client):
