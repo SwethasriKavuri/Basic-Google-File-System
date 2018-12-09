@@ -54,6 +54,8 @@ class HeartBeat(process):
             output('Chunk Servers available', self.heartBeatFromChunks)
             nonAvailableChunkServers = self.availableChunkServers - self.heartBeatFromChunks
             output("Chunk servers not available", nonAvailableChunkServers)
+            for chunkServer in nonAvailableChunkServers:
+                self.filesList[chunkServer] = []
         
         #Updates master with list of chunkServers which are not available
         send(('UPDATE_AVAILABLE_CHUNK_SERVERS', nonAvailableChunkServers), to = master)
