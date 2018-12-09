@@ -180,6 +180,12 @@ def main():
         await(some(received(('SNAPSHOT_SUCCESS', message))))
         assert(message == 'Snapshot Create Success') 
         output('**************Snapshot Created successfully*******************')
+        c = logical_clock()
+        send(('READ_MSG',c,fileNameOne), to=client4) 
+        await(some(received(('READ_FILE_DONE',dataRead,fileName2,c2)), 
+                                        has=fileNameOne == fileName2 and c2>c))
+        assert(s2 == dataRead)
+        output('**************Data Read From Snapshot is *******************',dataRead)
         output("************End of Test Case*********************")  
         
     if(testCase == 12): 
@@ -295,6 +301,8 @@ def main():
         await(some(received(('READ_FILE_DONE',dataRead,fileName2,c2)), 
                                         has=fileNameOne == fileName2 and c2>c))
         assert(dataRead == appended)
+        output('***************Data Appended in Order ***************',appended)
+        output('***************Data Read from file is ***************',dataRead)
         s2 = 'Append6'
         send(('RECORD_APPEND_MSG',fileNameOne, s2), to=client3)
         time.sleep(1)
@@ -306,7 +314,6 @@ def main():
         send(('READ_MSG',c,fileNameOne), to=client4) 
         await(some(received(('READ_FILE_DONE',dataRead,fileName2,c2)), 
                                         has=fileNameOne == fileName2 and c2>c))
-
         output('***************Data Read from file is ***************',dataRead)
         send(('DELETE',fileNameOne), to = client1)
         await(received(('DONE',)))
