@@ -20,6 +20,11 @@ class HeartBeat(process):
         self.filesList = {}
         
         self.master = master
+        
+        self.counter=0
+        
+        # Number of cycles in which we want garbage collection to happen
+        self.timeForGarbage =1
 
         
     def sendHeartBeat():
@@ -32,10 +37,13 @@ class HeartBeat(process):
         self.heartBeatFromChunks = set()
         nonAvailableChunkServers =set()
         
+        counter+=1
         #Obatain the list of chunkServers from master
         if len(self.availableChunkServers)==0:
             send(('GET_AVAILABLE_CHUNK_SERVERS',), to = master)
-            await(len(self.availableChunkServers)!=0)        
+            await(len(self.availableChunkServers)!=0)
+            for chunkServer in self.availableChunkServers:
+                self.filesList[chunkServer] = []        
         
         # Send heartbeat message to all the chunkServers and await their replies    
         for chunkServer in self.availableChunkServers:
@@ -50,8 +58,11 @@ class HeartBeat(process):
         #Updates master with list of chunkServers which are not available
         send(('UPDATE_AVAILABLE_CHUNK_SERVERS', nonAvailableChunkServers), to = master)
         
-        #Send the list of file obtained from chunkServers to master to be checked for garbage collection
-        send(('DELETE_ORPHANED_CHUNKS', self.filesList), to=master)
+        if counter% self.timeForGarbage==0:
+            #Send the list of file obtained from chunkServers to master to be checked for garbage collection
+            send(('DELETE_ORPHANED_CHUNKS', self.filesList), to=master)
+            for chunkServer in self.availableChunkServers:
+                self.filesList[chunkServer] = []
      
     def receive(msg=('AVAILABLE_CHUNK_SERVERS', availableChunkServers), from_=master):
         '''
@@ -71,7 +82,8 @@ class HeartBeat(process):
         localFileList = []
         for file in files:
             localFileList.append(file[:-4]) 
-        self.filesList[chunkServer] = localFileList 
+        self.filesList[chunkServer].extend(localFileList)
+        self.filesList[chunkServer] = list(set(self.filesList[chunkServer])) 
 
     def run():
         while True:
