@@ -234,23 +234,31 @@ def main():
         await(some(received(('CREATED', fileName2)), has=fileNameOne == fileName2))
         send(('CREATE_MSG',fileNameTwo), to=client2)
         await(some(received(('CREATED', fileName2)), has=fileNameTwo == fileName2))
-        send(('DELETE',fileNameOne), to = client1)
-        await(some(received(('DELETE_DONE',fileName2,message)),has=fileNameOne == fileName2))
-        assert(message == 'File Delete Success')
         send(('WRITE_MSG',fileNameTwo, s1), to=client3)
         await(some(received(('WRITTEN', fileName2)),has=fileNameTwo == fileName2))
         s2 = 'Append1232'
-        send(('RECORD_APPEND_MSG',fileNameTwo, s2), to=client1)
-        time.sleep(1)
         send(('CREATE_SNAPSHOT',fileNameTwo), to = client3)
         time.sleep(15)
-        appended = 'Hi testing 12Append1232'
+        appended = s1
+        c = logical_clock()
+        send(('READ_MSG',c,fileNameTwo), to=client4) 
+        await(some(received(('READ_FILE_DONE',dataRead,fileName2,c2)), 
+                                        has=fileNameTwo == fileName2 and c2>c))
+        assert(appended == dataRead)
+        output('*******************THIS IS THE DATA READ from file**********************',dataRead)
         c = logical_clock()
         send(('READ_MSG',c,fileNameTwo), to=client4) 
         await(some(received(('READ_FILE_DONE',dataRead,fileName2,c2)), 
                                         has=fileNameTwo == fileName2))
         assert(appended == dataRead)
         output('*******************THIS IS THE DATA READ from file**********************',dataRead)
+        c = logical_clock()
+        send(('READ_MSG',c,fileNameTwo), to=client4) 
+        await(some(received(('READ_FILE_DONE',dataRead,fileName2,c2)), 
+                                        has=fileNameTwo == fileName2))
+        assert(appended == dataRead)
+        output('*******************THIS IS THE DATA READ from file**********************',dataRead)
+        c = logical_clock()
         send(('READ_MSG',c,fileNameThree), to=client4) 
         await(some(received(('ERROR_READ', message))))
         assert(message == 'File Doesnt Exist to read')
