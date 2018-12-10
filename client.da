@@ -376,8 +376,7 @@ class GFSClient(process):
             elif timeout(10):
                 raise Exception("FAIL2")
             send(('FINISH_PROCESS', 'Delete'), to= pmon)
-            send(('DELETE_DONE',fileName), to=nodeof(self))
-            send(('DELETE_SUCCESS','File Delete Success'), to=nodeof(self))
+            send(('DELETE_DONE',fileName,'File Delete Success'), to=nodeof(self))
         except Exception as e:
             send(('FINISH_PROCESS_FAIL', 'Delete'), to= pmon)
             if str(e) == "FAIL1":
@@ -451,6 +450,7 @@ class GFSClient(process):
                 output("**********************File error, file does not exists to create Snapshot************************* " + fileName)
             else:
                 output('Error', str(e))
+                send(('ERROR_SNAPSHOT',str(e)),to=nodeof(self))
         finally:
             send(('PROCESS_NEXT_IN_LEASE_Q', fileName), to= master)
     
