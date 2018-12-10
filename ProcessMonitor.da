@@ -67,17 +67,28 @@ class ProcessMonitor(process):
         output('Snapshot Q: ', createSnapshotQ)
         
         
-        #times1 = [a[2] for a in recordAppendQ]
+        times1 = [a[2] for a in recordAppendQ]
         times2 = [a[2] for a in readQ]
-        #times3 = [a[2] for a in writeQ]
+        times3 = [a[2] for a in writeQ]
 
-        #timeTaken1 = max(times1) - min(times1)
-        timeTaken2 = max(times2) - min(times2)
-        #timeTaken3 = max(times3) - min(times3)
+        if len(times1) > 0:
+            timeTaken1 = max(times1) - min(times1)
+        else:
+            timeTaken1 = 0
 
-        #output('Time taken for ', len(times1)/2, ' record appends: ', timeTaken1)
+        if len(times2) > 0:
+            timeTaken2 = max(times2) - min(times2)
+        else:
+            timeTaken2 = 0
+
+        if len(times3) > 0:
+            timeTaken3 = max(times3) - min(times3)
+        else:
+            timeTaken3 = 0
+
+        output('Time taken for ', len(times1)/2, ' record appends: ', timeTaken1)
         output('Time taken for ', len(times2)/2, ' reads: ', timeTaken2)
-        #output('Time taken for ', len(times3)/2, ' writes: ', timeTaken3)
+        output('Time taken for ', len(times3)/2, ' writes: ', timeTaken3)
         
         output('######################################## LOGS END ########################################')
 

@@ -6,6 +6,9 @@ config(channel is fifo, clock is lamport)
 
 def main():
 
+    numClients = int(sys.argv[1]) if len(sys.argv) > 1 else 1
+    testCase = int(sys.argv[2]) if len(sys.argv) > 1 else 1
+
     processMon = new(ProcessMonitor)
     setup(processMon, ())
     start(processMon)
@@ -16,35 +19,51 @@ def main():
     start(master1)
 
     clients = []
-    for i in range(500):
+    for i in range(numClients):
         client1 = new(GFSClient)
         setup(client1, (master1,processMon))
         start(client1)
         clients.append(client1)
         
-    #output(clients)
-    s2 = '“We believe that we can change the things around us in accordance with our desires—we believe it because otherwise we can see no favourable outcome. We do not think of the outcome which generally comes to pass and is also favourable: we do not succeed in changing things in accordance with our desires, but gradually our desires change. The situation that we hoped to change because it was intolerable becomes unimportant to us. We have failed to surmount the obstacle, as we were absolutely determined to do, but life has taken us round it, led us beyond it, and then if we turn round to gaze into the distance of the past, we can barely see it, so imperceptible has it become.”'
-    fileName = 'abc.txt'
-    
-    send(('CREATE_MSG',  fileName), to=clients[0])
-    await(some(received(('CREATED', fileName2)), has=fileName == fileName2))
-    
-    send(('WRITE_MSG',fileName, s2), to=clients[0])
-    await(some(received(('WRITTEN', fileName2)),has=fileName == fileName2))
+    #s2 = '“We believe that we can change the things around us in accordance with our desires—we believe it because otherwise we can see no favourable outcome. We do not think of the outcome which generally comes to pass and is also favourable: we do not succeed in changing things in accordance with our desires, but gradually our desires change. The situation that we hoped to change because it was intolerable becomes unimportant to us. We have failed to surmount the obstacle, as we were absolutely determined to do, but life has taken us round it, led us beyond it, and then if we turn round to gaze into the distance of the past, we can barely see it, so imperceptible has it become.”'
+    s2 = '9'    
 
-    #for i in range():
-    #    fileName = str(i)+'.txt'
-    #    send(('CREATE_MSG',  fileName), to=clients[i])
-    #    await(some(received(('CREATED', fileName2)), has=fileName == fileName2))
+    # testCase 1 is for N reads; s2 is written to a single file and N reads are performed on it
+    if testCase == 1:
+        fileName = 'abc.txt'
     
-    for i in range(500):
-        c = logical_clock()
-        send(('READ_MSG', c, 'abc.txt'), to=client1)
-        #fileName = str(i)+'.txt'
-        #send(('WRITE_MSG',fileName, s2), to=clients[i])
-        #send(('WRITE_APPEND_MSG', 'abc.txt', s2), to=clients[i])
+        send(('CREATE_MSG',  fileName), to=clients[0])
+        await(some(received(('CREATED', fileName2)), has=fileName == fileName2))
+    
+        send(('WRITE_MSG',fileName, s2), to=clients[0])
+        await(some(received(('WRITTEN', fileName2)),has=fileName == fileName2))
+        
+        for i in range(numClients):
+            c = logical_clock()
+            send(('READ_MSG', c, fileName), to=clients[i])
+
+    # testCase 2 is for N writes; s2 is written onto N different newly created files by N different clients
+    elif testCase == 2:
+        for i in range(numClients):
+            fileName = str(i)+'.txt'
+            send(('CREATE_MSG',  fileName), to=clients[i])
+            await(some(received(('CREATED', fileName2)), has=fileName == fileName2))
+        
+        for i in range(numClients):
+            fileName = str(i)+'.txt'
+            send(('WRITE_MSG',fileName, s2), to=clients[i])
+
+    # testCase 3 is for N Record Appends; s2 is written onto a single newly created file by N different clients
+    elif testCase == 3:
+        fileName = 'abc.txt'
+    
+        send(('CREATE_MSG',  fileName), to=clients[0])
+        await(some(received(('CREATED', fileName2)), has=fileName == fileName2))
+
+        for i in range(numClients):
+            send(('RECORD_APPEND_MSG', 'abc.txt', s2), to=clients[i])
 
 
-    time.sleep(10)
+    time.sleep(100)
     send(('PRINT_MONITOR', ), to=processMon)
     await(received(('DONE',)))

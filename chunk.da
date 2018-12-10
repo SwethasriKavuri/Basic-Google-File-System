@@ -13,6 +13,7 @@ class GFSChunkserver(process):
         output('Setting up chunk', chunkloc)
         self.chunkloc = chunkloc
         self.chunktable = {}
+        self.heartBeatNumFiles = 5
         
         # stores the uuid and data corresponding to it
         self.localStore = {} 
@@ -142,8 +143,8 @@ class GFSChunkserver(process):
         each chunkserver reports a subset of the chunks it has
         '''
         files  = os.listdir(self.localFilesystemRoot)
-        if len(files)>20:
-            files  =files[0:20]
+        if len(files)>self.heartBeatNumFiles:
+            files  =files[0:self.heartBeatNumFiles]
         send(('HEARTBEAT_ACKNOWLEDGED',files), to=heartBeat)
     
     def receive(msg =('DELETED_CHUNKS', chunkuuids), from_= master):
