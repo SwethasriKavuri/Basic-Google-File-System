@@ -3,10 +3,13 @@
 
 Instructions to run the code:
 
-P.S. : The user should delete the directory ‘/tmp/gfs/chunks’ so that the files that were left from previous run gets removed. Our guess is that if we don’t remove that it sometimes leads to MessageTooBigException.
+It is recommeneded that the user should delete the directory ‘/tmp/gfs/chunks’ so that the files that were left from previous run gets removed.
+
 
 To run main process:
 	python3 -m da main.da
+
+Main.da file was used for testing during our local development. It contains the message formats for the different operations that we support and a complete end to end flow with different operations. 
 
 To run Correctness Testing:
 	python3 -m da test.da <testCase Number> (testCases are numbered from 0-16)
