@@ -238,7 +238,7 @@ def main():
         await(some(received(('WRITTEN', fileName2)),has=fileNameTwo == fileName2))
         s2 = 'Append1232'
         send(('CREATE_SNAPSHOT',fileNameTwo), to = client3)
-        time.sleep(15)
+        time.sleep(2)
         appended = s1
         c = logical_clock()
         send(('READ_MSG',c,fileNameTwo), to=client4) 
@@ -278,7 +278,7 @@ def main():
         send(('RECORD_APPEND_MSG',fileNameTwo, s2), to=client1)
         time.sleep(1)
         send(('CREATE_SNAPSHOT',fileNameTwo), to = client3)
-        time.sleep(15)
+        time.sleep(2)
         c = logical_clock()
         send(('READ_MSG',c,fileNameOne), to=client4) 
         await(some(received(('READ_FILE_DONE',dataRead,fileName2,c2)), 
